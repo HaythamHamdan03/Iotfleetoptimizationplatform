@@ -1,175 +1,528 @@
-import React from 'react';
-import { Truck, Battery } from 'lucide-react';
-import { mockVehicles } from '@/app/data/mockData';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import L from 'leaflet';
+import {
+  Wifi, WifiOff, Satellite, Settings, ChevronDown, ChevronUp,
+  Thermometer, Wind, Gauge, MapPin, CheckCircle2, Battery, Truck, Zap,
+} from 'lucide-react';
+import { mockVehicles, mockDeliveryStops } from '@/app/data/mockData';
+import type { Vehicle } from '@/app/data/mockData';
 import { useLanguage } from '@/app/i18n/LanguageContext';
+import { useIoTDevice } from '@/app/hooks/useIoTDevice';
+import { useDisruptionDetector, Disruption } from '@/app/hooks/useDisruptionDetector';
+import { IOT_CONFIG } from '@/app/config/iotConfig';
+
+delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).href,
+  shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).href,
+});
+
+const BASE_LAT = 24.774265;
+const BASE_LON = 46.738586;
+
+function timeAgo(date: Date): string {
+  const sec = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  return `${Math.floor(min / 60)}h ago`;
+}
+
+function formatDisruptionType(type: Disruption['type']): string {
+  return type.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+}
+
+const vehicleColor = (status: Vehicle['status']) =>
+  status === 'on-route' ? '#16a34a' : status === 'delayed' ? '#dc2626' : '#6b7280';
+
+// Remaining delivery stops (current + pending) for route drawing
+const routeStops = mockDeliveryStops.filter(s => s.status !== 'completed');
 
 export function LiveFleetMapPage() {
-  const [selectedVehicle, setSelectedVehicle] = React.useState<string | null>(null);
   const { t, isRTL } = useLanguage();
+  const { data, isConnected, lastUpdated, consecutiveFailures } = useIoTDevice();
+  const { disruptions, isRecalculating, recalcTimeMs, systemReliability, acknowledgeDisruption } =
+    useDisruptionDetector(data);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'on-route': return 'bg-green-500';
-      case 'delayed': return 'bg-red-500';
-      case 'idle': return 'bg-gray-400';
-      default: return 'bg-gray-400';
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const ev02MarkerRef = useRef<L.CircleMarker | null>(null);
+  const mockMarkerRefs = useRef<Map<string, L.CircleMarker>>(new Map());
+  const routePolylineRef = useRef<L.Polyline | null>(null);
+  const recalcCountRef = useRef(0);
+  const prevIsRecalcRef = useRef(false);
+
+  const [logOpen, setLogOpen] = useState(true);
+  const [deviceIpEdit, setDeviceIpEdit] = useState(false);
+  const [deviceIp, setDeviceIp] = useState(IOT_CONFIG.DEVICE_URL.replace('http://', ''));
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
+
+  const unresolvedDisruptions = disruptions.filter((d: Disruption) => d.resolvedAt === null);
+  const selectedVehicle = selectedVehicleId === 'EV-02'
+    ? null
+    : mockVehicles.find(v => v.id === selectedVehicleId) ?? null;
+
+  const panTo = useCallback((lat: number, lng: number) => {
+    mapRef.current?.setView([lat, lng], 14, { animate: true });
+  }, []);
+
+  const selectVehicle = useCallback((id: string, lat: number, lng: number) => {
+    setSelectedVehicleId(id);
+    panTo(lat, lng);
+  }, [panTo]);
+
+  // Draw or update the route polyline
+  const drawRoute = useCallback((lat: number, lon: number, color = '#2563eb', offset = 0) => {
+    if (!mapRef.current) return;
+    const sign = recalcCountRef.current % 2 === 0 ? 1 : -1;
+    const points: L.LatLngExpression[] = [
+      [lat, lon],
+      ...routeStops.map((s, i) => [
+        s.lat + (i > 0 ? sign * offset : 0),
+        s.lng + (i > 0 ? sign * offset * 0.6 : 0),
+      ] as L.LatLngExpression),
+    ];
+
+    if (routePolylineRef.current) {
+      routePolylineRef.current.setLatLngs(points);
+      routePolylineRef.current.setStyle({ color, weight: color === '#f59e0b' ? 4 : 3 });
+    } else {
+      routePolylineRef.current = L.polyline(points, {
+        color,
+        weight: 3,
+        opacity: 0.85,
+      }).addTo(mapRef.current).bringToBack();
     }
-  };
+  }, []);
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'on-route': return t('fleet.onRoute');
-      case 'delayed': return t('fleet.delayed');
-      case 'idle': return t('fleet.idle');
-      default: return status;
+  // Init map once
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current) return;
+
+    const map = L.map(mapContainerRef.current, { zoomControl: true })
+      .setView([24.7136, 46.6753], 12);
+    mapRef.current = map;
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(map);
+
+    // Draw initial route from base EV-02 position
+    const initialPoints: L.LatLngExpression[] = [
+      [BASE_LAT, BASE_LON],
+      ...routeStops.map(s => [s.lat, s.lng] as L.LatLngExpression),
+    ];
+    routePolylineRef.current = L.polyline(initialPoints, {
+      color: '#2563eb',
+      weight: 3,
+      opacity: 0.85,
+    }).addTo(map).bringToBack();
+
+    // Destination flag marker at final stop
+    const finalStop = routeStops[routeStops.length - 1];
+    if (finalStop) {
+      L.circleMarker([finalStop.lat, finalStop.lng], {
+        radius: 8,
+        fillColor: '#dc2626',
+        color: '#fff',
+        weight: 2,
+        fillOpacity: 1,
+      }).addTo(map).bindTooltip('Destination', { permanent: false });
     }
-  };
 
-  const selected = mockVehicles.find(v => v.id === selectedVehicle);
+    // Static mock vehicle markers (excluding EV-02)
+    mockVehicles.filter(v => v.id !== 'V002').forEach(v => {
+      const m = L.circleMarker([v.lat, v.lng], {
+        radius: 9,
+        fillColor: vehicleColor(v.status),
+        color: '#fff',
+        weight: 2,
+        fillOpacity: 0.9,
+      }).addTo(map).bindPopup(`<b>${v.name}</b><br>${v.driverName}<br>${v.status}`);
+      m.on('click', () => selectVehicle(v.id, v.lat, v.lng));
+      mockMarkerRefs.current.set(v.id, m);
+    });
+
+    // EV-02 live marker
+    const ev02 = L.circleMarker([BASE_LAT, BASE_LON], {
+      radius: 14,
+      fillColor: '#2563eb',
+      color: '#1d4ed8',
+      weight: 3,
+      fillOpacity: 0.9,
+    }).addTo(map);
+    ev02.bindPopup('EV-02 | loading...');
+    ev02.on('click', () => setSelectedVehicleId('EV-02'));
+    ev02MarkerRef.current = ev02;
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      ev02MarkerRef.current = null;
+      routePolylineRef.current = null;
+      mockMarkerRefs.current.clear();
+    };
+  }, [selectVehicle]);
+
+  // Update EV-02 marker + route as vehicle moves
+  useEffect(() => {
+    if (!data?.gps_fix) return;
+    if (ev02MarkerRef.current) {
+      ev02MarkerRef.current.setLatLng([data.lat, data.lon]);
+      ev02MarkerRef.current.setPopupContent(
+        `EV-02 | ${data.speed.toFixed(1)} km/h | ${data.motion} | ${data.temp.toFixed(1)}°C`
+      );
+    }
+    drawRoute(data.lat, data.lon);
+  }, [data, drawRoute]);
+
+  // Flash route amber when recalculation completes, then show new path in blue
+  useEffect(() => {
+    const wasRecalculating = prevIsRecalcRef.current;
+    prevIsRecalcRef.current = isRecalculating;
+    if (!wasRecalculating || isRecalculating) return;
+
+    recalcCountRef.current += 1;
+    const lat = data?.lat ?? BASE_LAT;
+    const lon = data?.lon ?? BASE_LON;
+    const offset = recalcCountRef.current * 0.0003;
+
+    drawRoute(lat, lon, '#f59e0b', offset);
+    const timer = setTimeout(() => drawRoute(lat, lon, '#2563eb', offset), 1500);
+    return () => clearTimeout(timer);
+  }, [isRecalculating, data, drawRoute]);
+
+  const reliabilityColor =
+    systemReliability >= 97 ? 'bg-green-100 text-green-700' :
+    systemReliability >= 93 ? 'bg-amber-100 text-amber-700' :
+    'bg-red-100 text-red-700';
+
+  const severityBadge = (s: Disruption['severity']) =>
+    s === 'high' ? 'bg-red-100 text-red-700' :
+    s === 'medium' ? 'bg-amber-100 text-amber-700' :
+    'bg-blue-100 text-blue-700';
+
+  const tempBadge = (status: string) =>
+    status === 'TOO HOT' ? 'bg-red-100 text-red-700' :
+    status === 'WARM' ? 'bg-amber-100 text-amber-700' :
+    'bg-green-100 text-green-700';
 
   return (
-    <div className={`h-full flex ${isRTL ? 'flex-row-reverse' : ''}`}>
-      {/* Map Area */}
-      <div className="flex-1 relative bg-gray-100">
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300">
-          <div className="absolute inset-0 opacity-20">
-            <div className="grid grid-cols-12 grid-rows-12 h-full">
-              {Array.from({ length: 144 }).map((_, i) => (
-                <div key={i} className="border border-gray-400"></div>
-              ))}
+    <div className={`h-full flex flex-col ${isRTL ? 'direction-rtl' : ''}`}>
+
+      {/* STATUS BAR */}
+      <div className="flex items-center gap-3 px-4 py-2 bg-white border-b border-gray-200 flex-shrink-0 flex-wrap">
+        <div className="flex items-center gap-2">
+          {isConnected ? (
+            <>
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+              </span>
+              <span className="text-sm font-medium text-green-700">{t('iot.connected')}</span>
+            </>
+          ) : (
+            <>
+              <WifiOff className="w-4 h-4 text-red-500" />
+              <span className="text-sm font-medium text-red-600">{t('iot.offline')}</span>
+            </>
+          )}
+        </div>
+
+        <div className="h-4 w-px bg-gray-300" />
+        <span className={`px-2 py-0.5 rounded text-xs font-semibold ${reliabilityColor}`}>
+          {t('iot.reliability')}: {systemReliability.toFixed(1)}%
+        </span>
+
+        {recalcTimeMs !== null && (
+          <>
+            <div className="h-4 w-px bg-gray-300" />
+            <span className="text-xs text-gray-600">
+              {t('iot.recalcLast')}: {(recalcTimeMs / 1000).toFixed(1)}s
+            </span>
+          </>
+        )}
+
+        {unresolvedDisruptions.length > 0 && (
+          <>
+            <div className="h-4 w-px bg-gray-300" />
+            <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-700">
+              ⚠ {unresolvedDisruptions.length} {t('iot.disruption')}
+            </span>
+          </>
+        )}
+
+        <div className="h-4 w-px bg-gray-300" />
+        <div className="flex items-center gap-1 text-xs text-gray-600">
+          <Satellite className="w-3.5 h-3.5" />
+          <span>{data?.satellites ?? '—'} sats</span>
+        </div>
+
+        <button
+          onClick={() => data && panTo(data.lat, data.lon)}
+          className="ml-2 px-2 py-1 text-xs bg-amber-50 border border-amber-300 text-amber-700 rounded hover:bg-amber-100 transition-colors flex items-center gap-1"
+        >
+          <Zap className="w-3 h-3" /> Track EV-02
+        </button>
+
+        <div className="ml-auto flex items-center gap-2">
+          {deviceIpEdit ? (
+            <input
+              className="text-xs border border-gray-300 rounded px-2 py-0.5 w-36 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              value={deviceIp}
+              onChange={e => setDeviceIp(e.target.value)}
+              onBlur={() => setDeviceIpEdit(false)}
+              autoFocus
+            />
+          ) : (
+            <button
+              onClick={() => setDeviceIpEdit(true)}
+              className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded hover:bg-gray-100"
+            >
+              <Settings className="w-3.5 h-3.5" />
+              {t('iot.deviceConfig')}: {deviceIp}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* MAIN CONTENT */}
+      <div className={`flex flex-1 min-h-0 ${isRTL ? 'flex-row-reverse' : ''}`}>
+
+        {/* MAP — isolate contains Leaflet z-indexes */}
+        <div className="flex-1 relative isolate">
+          <div ref={mapContainerRef} className="absolute inset-0" />
+
+          {isRecalculating && (
+            <div
+              className="absolute top-3 right-3 bg-amber-500 text-white px-3 py-2 rounded-lg shadow-lg text-sm font-medium animate-pulse flex items-center gap-2"
+              style={{ zIndex: 1000 }}
+            >
+              ⚡ {t('iot.recalculating')}
             </div>
-          </div>
+          )}
+        </div>
 
-          <div className="absolute top-4 left-4 bg-white rounded-lg shadow-lg px-4 py-2">
-            <p className="text-sm font-medium text-gray-900">{t('fleet.location')}</p>
-            <p className="text-xs text-gray-500">{t('fleet.liveTracking')}</p>
-          </div>
+        {/* RIGHT SIDEBAR */}
+        <div className={`w-80 bg-white overflow-y-auto flex-shrink-0 ${isRTL ? 'border-r' : 'border-l'} border-gray-200 flex flex-col`}>
 
-          {mockVehicles.map((vehicle, index) => {
-            const x = 15 + (index % 3) * 30;
-            const y = 15 + Math.floor(index / 3) * 25;
-            const isSelected = selectedVehicle === vehicle.id;
-            return (
-              <button key={vehicle.id} onClick={() => setSelectedVehicle(vehicle.id)}
-                className={`absolute transform -translate-x-1/2 -translate-y-1/2 transition-all ${isSelected ? 'scale-125 z-10' : 'hover:scale-110'}`}
-                style={{ left: `${x}%`, top: `${y}%` }}>
-                <div className="relative">
-                  <div className={`w-12 h-12 rounded-full ${getStatusColor(vehicle.status)} shadow-lg flex items-center justify-center ${isSelected ? 'ring-4 ring-blue-400' : ''}`}>
-                    {vehicle.type === 'ev' ? <Battery className="w-6 h-6 text-white" /> : <Truck className="w-6 h-6 text-white" />}
+          {/* Selected vehicle detail */}
+          {selectedVehicleId && (
+            <div className="p-4 border-b border-blue-100 bg-blue-50 flex-shrink-0">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-blue-900">
+                  {selectedVehicleId === 'EV-02' ? 'EV-02 — Live' : selectedVehicle?.name}
+                </h3>
+                <button onClick={() => setSelectedVehicleId(null)} className="text-xs text-blue-400 hover:text-blue-600">✕</button>
+              </div>
+
+              {selectedVehicleId === 'EV-02' && data ? (
+                <div className="space-y-1 text-xs text-blue-900">
+                  <p><span className="text-blue-500">Driver:</span> Mohammed Al-Saud</p>
+                  <p><span className="text-blue-500">Speed:</span> {data.speed.toFixed(1)} km/h</p>
+                  <p><span className="text-blue-500">Motion:</span> {data.motion}</p>
+                  <p>
+                    <span className="text-blue-500">Temp:</span> {data.temp.toFixed(1)}°C
+                    <span className={`ml-1 px-1 rounded text-xs font-semibold ${tempBadge(data.temp_status)}`}>{data.temp_status}</span>
+                  </p>
+                  <p><span className="text-blue-500">Humidity:</span> {data.humidity.toFixed(1)}%</p>
+                  <p><span className="text-blue-500">Altitude:</span> {data.altitude.toFixed(1)} m</p>
+                  <p><span className="text-blue-500">GPS:</span> {data.gps_status} · {data.satellites} sats</p>
+                  <p><span className="text-blue-500">Coords:</span> {data.lat.toFixed(5)}, {data.lon.toFixed(5)}</p>
+                </div>
+              ) : selectedVehicle ? (
+                <div className="space-y-1 text-xs text-blue-900">
+                  <p><span className="text-blue-500">Driver:</span> {selectedVehicle.driverName}</p>
+                  <p><span className="text-blue-500">Status:</span> {selectedVehicle.status}</p>
+                  <p><span className="text-blue-500">Coords:</span> {selectedVehicle.lat.toFixed(4)}, {selectedVehicle.lng.toFixed(4)}</p>
+                  {selectedVehicle.type === 'ev'
+                    ? <p><span className="text-blue-500">Battery:</span> {selectedVehicle.batteryLevel}%</p>
+                    : <p><span className="text-blue-500">Fuel:</span> {selectedVehicle.fuelLevel}%</p>}
+                  <p><span className="text-blue-500">Load:</span> {selectedVehicle.currentLoad}/{selectedVehicle.maxLoad} kg</p>
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          {/* Live IoT Feed */}
+          <div className="p-4 border-b border-gray-100">
+            <div className={`flex items-center gap-2 mb-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
+              <Wifi className="w-4 h-4 text-blue-600" />
+              <h3 className="text-sm font-semibold text-gray-900">{t('iot.liveData')}</h3>
+            </div>
+
+            {!isConnected && consecutiveFailures > 0 && (
+              <div className="mb-3 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
+                <WifiOff className="w-4 h-4 flex-shrink-0" />
+                ⚠ {t('iot.lastKnown')}
+              </div>
+            )}
+
+            {data ? (
+              <div className="space-y-3">
+                <div className="text-center py-2">
+                  <p className="text-4xl font-bold text-gray-900">{data.speed.toFixed(1)}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">km/h</p>
+                </div>
+                <div className={`flex items-center justify-between text-sm ${isRTL ? 'flex-row-reverse' : ''}`}>
+                  <span className="text-gray-600 flex items-center gap-1"><Gauge className="w-3.5 h-3.5" />{t('iot.motion')}</span>
+                  <span className="font-medium text-gray-900">{data.motion}</span>
+                </div>
+                <div className={`flex items-center justify-between text-sm ${isRTL ? 'flex-row-reverse' : ''}`}>
+                  <span className="text-gray-600 flex items-center gap-1"><Thermometer className="w-3.5 h-3.5" />{t('iot.temperature')}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium">{data.temp.toFixed(1)}°C</span>
+                    <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${tempBadge(data.temp_status)}`}>{data.temp_status}</span>
                   </div>
-                  <div className="absolute top-full mt-1 left-1/2 transform -translate-x-1/2 bg-white px-2 py-1 rounded shadow text-xs font-medium whitespace-nowrap">{vehicle.name}</div>
                 </div>
-              </button>
-            );
-          })}
+                <div className={`flex items-center justify-between text-sm ${isRTL ? 'flex-row-reverse' : ''}`}>
+                  <span className="text-gray-600 flex items-center gap-1"><Wind className="w-3.5 h-3.5" />{t('iot.humidity')}</span>
+                  <span className="font-medium">{data.humidity.toFixed(1)}%</span>
+                </div>
+                <div className={`flex items-center justify-between text-sm ${isRTL ? 'flex-row-reverse' : ''}`}>
+                  <span className="text-gray-600 flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{t('iot.satellites')}</span>
+                  <span className="font-medium">{data.gps_status} · {data.satellites} sats</span>
+                </div>
+                <div className={`flex items-center justify-between text-sm ${isRTL ? 'flex-row-reverse' : ''}`}>
+                  <span className="text-gray-600">{t('iot.altitude')}</span>
+                  <span className="font-medium">{data.altitude.toFixed(1)} m</span>
+                </div>
+                {lastUpdated && (
+                  <p className="text-xs text-gray-400 text-center pt-1">{lastUpdated.toLocaleTimeString()}</p>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-6">Waiting for data...</p>
+            )}
+          </div>
 
-          <div className="absolute bottom-4 left-4 bg-white rounded-lg shadow-lg p-4">
-            <p className="text-sm font-medium text-gray-900 mb-2">{t('fleet.legend')}</p>
+          {/* Fleet Vehicles */}
+          <div className="p-4 flex-1">
+            <h3 className="text-sm font-semibold text-gray-900 mb-1">{t('home.fleetStatus')}</h3>
+            <p className="text-xs text-gray-400 mb-3">Click a vehicle to view details &amp; pan map</p>
             <div className="space-y-2">
-              {[
-                { color: 'bg-green-500', label: t('fleet.onRoute') },
-                { color: 'bg-red-500', label: t('fleet.delayed') },
-                { color: 'bg-gray-400', label: t('fleet.idle') },
-              ].map(({ color, label }) => (
-                <div key={label} className="flex items-center gap-2">
-                  <div className={`w-4 h-4 rounded-full ${color}`}></div>
-                  <span className="text-xs text-gray-600">{label}</span>
+
+              <button
+                onClick={() => data && selectVehicle('EV-02', data.lat, data.lon)}
+                className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                  selectedVehicleId === 'EV-02' ? 'border-blue-500 bg-blue-50' : 'border-blue-200 bg-blue-50/50 hover:border-blue-400'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Battery className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-semibold text-gray-900">EV-02</span>
+                  <span className="px-1.5 py-0.5 rounded text-xs font-bold bg-blue-600 text-white">● {t('iot.liveIndicator')}</span>
                 </div>
-              ))}
+                <p className="text-xs text-gray-500 mt-0.5">Mohammed Al-Saud</p>
+                {data && <p className="text-xs text-blue-600 mt-0.5">{data.speed.toFixed(1)} km/h · {data.motion}</p>}
+              </button>
+
+              {mockVehicles.filter(v => v.id !== 'V002').map(v => {
+                const isDelayed = v.status === 'delayed';
+                const matchedDisruption = disruptions.find(
+                  (d: Disruption) => d.vehicleId !== 'EV-02' && d.resolvedAt === null
+                );
+                return (
+                  <button
+                    key={v.id}
+                    onClick={() => selectVehicle(v.id, v.lat, v.lng)}
+                    className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                      selectedVehicleId === v.id ? 'border-blue-500 bg-blue-50' :
+                      isDelayed ? 'border-red-200 bg-red-50 hover:border-red-400' :
+                      'border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {v.type === 'ev'
+                          ? <Battery className="w-4 h-4 text-green-600" />
+                          : <Truck className="w-4 h-4 text-gray-600" />}
+                        <span className="text-sm font-medium text-gray-900">{v.name}</span>
+                        {isDelayed && (
+                          <span className="px-1.5 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700">DISRUPTED</span>
+                        )}
+                      </div>
+                      {isDelayed && matchedDisruption && (
+                        <button
+                          onClick={e => { e.stopPropagation(); acknowledgeDisruption(matchedDisruption.id); }}
+                          className="text-xs text-green-600 hover:text-green-700 font-medium flex items-center gap-1"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />{t('iot.resolve')}
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">{v.driverName}</p>
+                    <p className={`text-xs mt-0.5 font-medium ${
+                      v.status === 'on-route' ? 'text-green-600' :
+                      v.status === 'delayed' ? 'text-red-600' : 'text-gray-500'
+                    }`}>{v.status}</p>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Vehicle Details Sidebar */}
-      <div className={`w-80 bg-white overflow-auto ${isRTL ? 'border-r border-gray-200' : 'border-l border-gray-200'}`}>
-        <div className="p-6">
-          <h2 className={`text-lg font-semibold text-gray-900 mb-4 ${isRTL ? 'text-right' : ''}`}>{t('fleet.vehicleDetails')}</h2>
-
-          {selected ? (
-            <div className="space-y-4">
-              <div className="pb-4 border-b border-gray-200">
-                <div className={`flex items-center gap-3 mb-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                  <div className={`w-10 h-10 rounded-full ${getStatusColor(selected.status)} flex items-center justify-center`}>
-                    {selected.type === 'ev' ? <Battery className="w-5 h-5 text-white" /> : <Truck className="w-5 h-5 text-white" />}
-                  </div>
-                  <div className={isRTL ? 'text-right' : ''}>
-                    <h3 className="text-lg font-semibold text-gray-900">{selected.name}</h3>
-                    <p className="text-sm text-gray-500">{selected.id}</p>
-                  </div>
-                </div>
-                <div className={`flex items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                  <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    selected.status === 'on-route' ? 'bg-green-100 text-green-700'
-                    : selected.status === 'delayed' ? 'bg-red-100 text-red-700'
-                    : 'bg-gray-100 text-gray-700'}`}>
-                    {getStatusText(selected.status)}
-                  </div>
-                  <div className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                    {selected.type === 'ev' ? 'Electric' : 'ICE'}
-                  </div>
-                </div>
-              </div>
-
-              <div className={isRTL ? 'text-right' : ''}>
-                <p className="text-sm font-medium text-gray-900 mb-2">{t('fleet.driver')}</p>
-                <p className="text-sm text-gray-600">{selected.driverName}</p>
-                <p className="text-xs text-gray-500">ID: {selected.driverId}</p>
-              </div>
-
-              <div>
-                <div className={`flex items-center justify-between mb-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                  <p className="text-sm font-medium text-gray-900">
-                    {selected.type === 'ev' ? t('fleet.battery') : t('fleet.fuel')}
-                  </p>
-                  <p className="text-sm font-semibold text-gray-900">
-                    {selected.type === 'ev' ? selected.batteryLevel : selected.fuelLevel}%
-                  </p>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className={`h-2 rounded-full ${((selected.type === 'ev' ? selected.batteryLevel : selected.fuelLevel) || 0) > 50 ? 'bg-green-500' : 'bg-yellow-500'}`}
-                    style={{ width: `${selected.type === 'ev' ? selected.batteryLevel : selected.fuelLevel}%` }}></div>
-                </div>
-              </div>
-
-              <div className={isRTL ? 'text-right' : ''}>
-                <p className="text-sm font-medium text-gray-900 mb-2">{t('fleet.currentLocation')}</p>
-                <p className="text-xs text-gray-600">Lat: {selected.lat.toFixed(4)}</p>
-                <p className="text-xs text-gray-600">Lng: {selected.lng.toFixed(4)}</p>
-              </div>
-
-              <div className="space-y-2 pt-4">
-                <button className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
-                  {t('fleet.routeProgress')}
-                </button>
-                <button className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium">
-                  {t('fleet.contactDriver')}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <Truck className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-              <p className="text-sm text-gray-600">{t('fleet.selectVehicle')}</p>
-            </div>
-          )}
-        </div>
-
-        <div className="p-6 border-t border-gray-200">
-          <h3 className={`text-sm font-medium text-gray-900 mb-3 ${isRTL ? 'text-right' : ''}`}>{t('home.fleetStatus')}</h3>
-          <div className="space-y-2">
-            {[
-              { label: t('home.onRoute'), count: mockVehicles.filter(v => v.status === 'on-route').length, color: 'text-green-700' },
-              { label: t('home.idle'), count: mockVehicles.filter(v => v.status === 'idle').length, color: 'text-gray-700' },
-              { label: t('home.delayed'), count: mockVehicles.filter(v => v.status === 'delayed').length, color: 'text-red-700' },
-            ].map(({ label, count, color }) => (
-              <div key={label} className={`flex items-center justify-between text-sm ${isRTL ? 'flex-row-reverse' : ''}`}>
-                <span className="text-gray-600">{label}</span>
-                <span className={`font-medium ${color}`}>{count}</span>
-              </div>
-            ))}
+      {/* DISRUPTION LOG */}
+      <div className="bg-white border-t border-gray-200 flex-shrink-0">
+        <button
+          onClick={() => setLogOpen(o => !o)}
+          className={`w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition-colors ${isRTL ? 'flex-row-reverse' : ''}`}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-gray-900">Disruption Log</span>
+            {unresolvedDisruptions.length > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                {unresolvedDisruptions.length}
+              </span>
+            )}
           </div>
-        </div>
+          {logOpen ? <ChevronDown className="w-4 h-4 text-gray-500" /> : <ChevronUp className="w-4 h-4 text-gray-500" />}
+        </button>
+
+        {logOpen && (
+          <div className="px-4 pb-3 max-h-48 overflow-y-auto">
+            {disruptions.length === 0 ? (
+              <p className="text-sm text-green-600 py-2 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" /> ✓ {t('iot.noDisruptions')}
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {disruptions.map((d: Disruption) => (
+                  <div key={d.id} className={`flex items-start gap-3 py-2 border-b border-gray-100 last:border-0 ${isRTL ? 'flex-row-reverse' : ''}`}>
+                    <span className={`mt-0.5 px-2 py-0.5 rounded text-xs font-semibold flex-shrink-0 ${severityBadge(d.severity)}`}>
+                      {d.severity.toUpperCase()}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-medium text-gray-900 ${d.resolvedAt ? 'line-through text-gray-400' : ''}`}>
+                        {formatDisruptionType(d.type)}
+                      </p>
+                      <p className="text-xs text-gray-500">{d.description}</p>
+                      <p className="text-xs text-gray-400">{timeAgo(d.detectedAt)}</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                      {d.resolvedAt ? (
+                        <span className="text-xs text-green-600 font-medium">✓ Resolved</span>
+                      ) : (
+                        <>
+                          <span className="text-xs text-red-500 font-medium">● Active</span>
+                          <button
+                            onClick={() => acknowledgeDisruption(d.id)}
+                            className="text-xs text-gray-400 hover:text-green-600 underline"
+                          >
+                            {t('iot.resolve')}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

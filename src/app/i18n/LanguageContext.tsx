@@ -288,6 +288,25 @@ const en: Record<string, string> = {
   'profile.logout': 'Logout',
   'profile.language': 'Language',
   'profile.selectLanguage': 'Select Language',
+
+  // IoT
+  'iot.connected': 'IoT Device Connected',
+  'iot.offline': 'Device Offline',
+  'iot.lastKnown': 'Showing last known data',
+  'iot.liveData': 'Live IoT Feed',
+  'iot.temperature': 'Temperature',
+  'iot.humidity': 'Humidity',
+  'iot.motion': 'Motion State',
+  'iot.satellites': 'Satellites',
+  'iot.altitude': 'Altitude',
+  'iot.recalculating': 'Recalculating Route...',
+  'iot.disruption': 'Disruption Detected',
+  'iot.reliability': 'Reliability',
+  'iot.resolve': 'Resolve',
+  'iot.noDisruptions': 'No active disruptions',
+  'iot.deviceConfig': 'Device IP',
+  'iot.liveIndicator': 'LIVE',
+  'iot.recalcLast': 'Last Recalc',
 };
 
 const ar: Record<string, string> = {
@@ -529,6 +548,25 @@ const ar: Record<string, string> = {
   'profile.logout': 'تسجيل الخروج',
   'profile.language': 'اللغة',
   'profile.selectLanguage': 'اختر اللغة',
+
+  // IoT
+  'iot.connected': 'جهاز IoT متصل',
+  'iot.offline': 'الجهاز غير متصل',
+  'iot.lastKnown': 'عرض آخر بيانات معروفة',
+  'iot.liveData': 'بيانات IoT المباشرة',
+  'iot.temperature': 'درجة الحرارة',
+  'iot.humidity': 'الرطوبة',
+  'iot.motion': 'حالة الحركة',
+  'iot.satellites': 'الأقمار الصناعية',
+  'iot.altitude': 'الارتفاع',
+  'iot.recalculating': 'إعادة حساب المسار...',
+  'iot.disruption': 'تم اكتشاف اضطراب',
+  'iot.reliability': 'الموثوقية',
+  'iot.resolve': 'حل',
+  'iot.noDisruptions': 'لا اضطرابات نشطة',
+  'iot.deviceConfig': 'عنوان الجهاز',
+  'iot.liveIndicator': 'مباشر',
+  'iot.recalcLast': 'آخر إعادة حساب',
 };
 
 const ur: Record<string, string> = {
@@ -606,6 +644,25 @@ const ur: Record<string, string> = {
   'profile.logout': 'لاگ آؤٹ',
   'profile.language': 'زبان',
   'profile.selectLanguage': 'زبان منتخب کریں',
+
+  // IoT
+  'iot.connected': 'IoT آلہ منسلک',
+  'iot.offline': 'آلہ آف لائن',
+  'iot.lastKnown': 'آخری معلوم ڈیٹا',
+  'iot.liveData': 'لائیو IoT فیڈ',
+  'iot.temperature': 'درجہ حرارت',
+  'iot.humidity': 'نمی',
+  'iot.motion': 'حرکت کی حالت',
+  'iot.satellites': 'سیٹلائٹ',
+  'iot.altitude': 'اونچائی',
+  'iot.recalculating': 'راستہ دوبارہ حساب ہو رہا ہے',
+  'iot.disruption': 'خلل کا پتہ چلا',
+  'iot.reliability': 'قابل اعتماد',
+  'iot.resolve': 'حل کریں',
+  'iot.noDisruptions': 'کوئی فعال خلل نہیں',
+  'iot.deviceConfig': 'آلہ IP',
+  'iot.liveIndicator': 'براہ راست',
+  'iot.recalcLast': 'آخری دوبارہ حساب',
 
   // Fleet / Route / Analytics / Settings (fallback to English for web, only mobile matters)
   'nav.overview': 'جائزہ',

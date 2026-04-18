@@ -1,6 +1,13 @@
+@import 'leaflet/dist/leaflet.css';
 @import './fonts.css';
 @import './tailwind.css';
 @import './theme.css';
+
+.leaflet-top.leaflet-left { top: 8px; left: 8px; }
+.leaflet-top.leaflet-right { top: 8px; right: 8px; }
+@media (max-width: 480px) {
+  .leaflet-control-attribution { display: none; }
+}
 
 /* RTL support */
 [dir="rtl"] {
