@@ -13,28 +13,7 @@ import { RouteNavigationPage } from '@/app/components/mobile/RouteNavigationPage
 import { VehicleStatusPage } from '@/app/components/mobile/VehicleStatusPage';
 import { NotificationsPage } from '@/app/components/mobile/NotificationsPage';
 import { ProfilePage } from '@/app/components/mobile/ProfilePage';
-import { LanguageProvider, useLanguage, type Language } from '@/app/i18n/LanguageContext';
-
-function DashboardLanguageSwitcher() {
-  const { language, setLanguage } = useLanguage();
-  return (
-    <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-      {(['en', 'ar'] as Language[]).map((lang) => (
-        <button
-          key={lang}
-          onClick={() => setLanguage(lang)}
-          className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
-            language === lang
-              ? 'bg-white text-blue-700 shadow-sm'
-              : 'text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          {lang === 'en' ? 'EN' : 'عر'}
-        </button>
-      ))}
-    </div>
-  );
-}
+import { LanguageProvider, useLanguage } from '@/app/i18n/LanguageContext';
 
 function AppInner() {
   const [viewMode, setViewMode] = React.useState<'web' | 'mobile'>('web');
@@ -42,7 +21,8 @@ function AppInner() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="fixed top-4 right-4 z-50 bg-white rounded-lg shadow-lg p-2 border border-gray-200">
+      {/* Platform switcher — bottom-left */}
+      <div className="fixed bottom-4 left-4 z-50 bg-white rounded-lg shadow-lg p-2 border border-gray-200">
         <div className="flex gap-2 items-center">
           <button
             onClick={() => setViewMode('web')}
@@ -64,7 +44,6 @@ function AppInner() {
           >
             {t('app.mobileApp')}
           </button>
-          {viewMode === 'web' && <DashboardLanguageSwitcher />}
         </div>
       </div>
 
