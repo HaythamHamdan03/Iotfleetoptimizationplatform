@@ -14,6 +14,7 @@ import { VehicleStatusPage } from '@/app/components/mobile/VehicleStatusPage';
 import { NotificationsPage } from '@/app/components/mobile/NotificationsPage';
 import { ProfilePage } from '@/app/components/mobile/ProfilePage';
 import { LanguageProvider, useLanguage } from '@/app/i18n/LanguageContext';
+import { IoTProvider } from '@/app/context/IoTContext';
 
 function AppInner() {
   const [viewMode, setViewMode] = React.useState<'web' | 'mobile'>('web');
@@ -78,9 +79,11 @@ function AppInner() {
 export default function App() {
   return (
     <LanguageProvider>
-      <Router>
-        <AppInner />
-      </Router>
+      <IoTProvider>
+        <Router>
+          <AppInner />
+        </Router>
+      </IoTProvider>
     </LanguageProvider>
   );
 }

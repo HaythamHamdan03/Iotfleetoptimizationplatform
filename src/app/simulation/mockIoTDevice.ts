@@ -12,8 +12,9 @@ export interface IoTPayload {
   gps_fix: boolean;
 }
 
-const BASE_LAT = 24.774265;
-const BASE_LON = 46.738586;
+// SPL Central Post Office — depot / origin for the active driver (Dammam).
+const BASE_LAT = 26.4352;
+const BASE_LON = 50.1082;
 
 function deriveTempStatus(temp: number): IoTPayload['temp_status'] {
   if (temp >= 32) return 'TOO HOT';

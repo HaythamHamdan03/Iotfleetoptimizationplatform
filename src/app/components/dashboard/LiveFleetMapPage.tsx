@@ -2,14 +2,20 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
 import {
   Wifi, WifiOff, Satellite, Settings, ChevronDown, ChevronUp,
-  Thermometer, Wind, Gauge, MapPin, CheckCircle2, Battery, Truck, Zap,
+  Thermometer, Wind, Gauge, MapPin, CheckCircle2, Battery, Truck, Zap, RefreshCw,
 } from 'lucide-react';
 import { mockVehicles, mockDeliveryStops } from '@/app/data/mockData';
-import type { Vehicle } from '@/app/data/mockData';
+import type { Vehicle, DeliveryStop } from '@/app/data/mockData';
 import { useLanguage } from '@/app/i18n/LanguageContext';
-import { useIoTDevice } from '@/app/hooks/useIoTDevice';
-import { useDisruptionDetector, Disruption } from '@/app/hooks/useDisruptionDetector';
+import { useIoT } from '@/app/context/IoTContext';
+import type { Disruption } from '@/app/hooks/useDisruptionDetector';
 import { IOT_CONFIG } from '@/app/config/iotConfig';
+import {
+  fetchStreetRoute,
+  fetchAlternateStreetRoute,
+  type LatLng,
+} from '@/app/utils/streetRouting';
+import { renderStopMarkers, buildFinalStopIcon } from '@/app/utils/stopMarkers';
 
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -17,8 +23,9 @@ L.Icon.Default.mergeOptions({
   shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).href,
 });
 
-const BASE_LAT = 24.774265;
-const BASE_LON = 46.738586;
+// SPL Central Post Office — depot / origin for the active driver (Dammam).
+const BASE_LAT = 26.4352;
+const BASE_LON = 50.1082;
 
 function timeAgo(date: Date): string {
   const sec = Math.floor((Date.now() - date.getTime()) / 1000);
@@ -35,27 +42,63 @@ function formatDisruptionType(type: Disruption['type']): string {
 const vehicleColor = (status: Vehicle['status']) =>
   status === 'on-route' ? '#16a34a' : status === 'delayed' ? '#dc2626' : '#6b7280';
 
-// Remaining delivery stops (current + pending) for route drawing
-const routeStops = mockDeliveryStops.filter(s => s.status !== 'completed');
+// Muted palette for other vehicles' planned routes (distinct from blue/amber).
+const ROUTE_COLORS: Record<string, string> = {
+  V001: '#64748b', // slate
+  V003: '#0d9488', // teal
+  V004: '#a3a847', // olive
+  V005: '#8b5cf6', // purple
+  V006: '#6b7280', // gray
+};
+
+// Active driver (V002 / EV-02) — the stops for the blue/amber live polyline.
+const activeVehicle = mockVehicles.find(v => v.id === 'V002');
+const activeRouteStops: DeliveryStop[] = (activeVehicle?.routeStopIds ?? [])
+  .map(id => mockDeliveryStops.find(s => s.id === id))
+  .filter((s): s is DeliveryStop => !!s);
+const activeFinalStopId = activeRouteStops[activeRouteStops.length - 1]?.id;
+
+function stopsForVehicle(v: Vehicle): DeliveryStop[] {
+  return v.routeStopIds
+    .map(id => mockDeliveryStops.find(s => s.id === id))
+    .filter((s): s is DeliveryStop => !!s);
+}
 
 export function LiveFleetMapPage() {
   const { t, isRTL } = useLanguage();
-  const { data, isConnected, lastUpdated, consecutiveFailures } = useIoTDevice();
-  const { disruptions, isRecalculating, recalcTimeMs, systemReliability, acknowledgeDisruption } =
-    useDisruptionDetector(data);
+  const {
+    iotData: data,
+    isConnected,
+    lastUpdated,
+    consecutiveFailures,
+    disruptions,
+    isRecalculating,
+    recalcTimeMs,
+    systemReliability,
+    acknowledgeDisruption,
+    hasRecalculated,
+    setHasRecalculated,
+    manualRecalcTick,
+    triggerManualRecalc,
+  } = useIoT();
 
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const ev02MarkerRef = useRef<L.CircleMarker | null>(null);
   const mockMarkerRefs = useRef<Map<string, L.CircleMarker>>(new Map());
   const routePolylineRef = useRef<L.Polyline | null>(null);
-  const recalcCountRef = useRef(0);
+  const prevActivePathRef = useRef<LatLng[] | null>(null);
+  const finalStopMarkerRef = useRef<L.Marker | null>(null);
+  const vehicleRouteLayersRef = useRef<Map<string, L.Polyline>>(new Map());
   const prevIsRecalcRef = useRef(false);
+  const prevManualRecalcTickRef = useRef(manualRecalcTick);
+  const routingTokenRef = useRef(0);
 
   const [logOpen, setLogOpen] = useState(true);
   const [deviceIpEdit, setDeviceIpEdit] = useState(false);
   const [deviceIp, setDeviceIp] = useState(IOT_CONFIG.DEVICE_URL.replace('http://', ''));
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
+  const [isRouting, setIsRouting] = useState(false);
 
   const unresolvedDisruptions = disruptions.filter((d: Disruption) => d.resolvedAt === null);
   const selectedVehicle = selectedVehicleId === 'EV-02'
@@ -71,36 +114,68 @@ export function LiveFleetMapPage() {
     panTo(lat, lng);
   }, [panTo]);
 
-  // Draw or update the route polyline
-  const drawRoute = useCallback((lat: number, lon: number, color = '#2563eb', offset = 0) => {
+  // Compute a street-following route from (lat,lon) through the active driver's stops,
+  // then replace the polyline. `asRecalc=false` -> initial blue solid; `true` -> amber
+  // dashed route that meaningfully diverges from the previous path.
+  const computeRoute = useCallback(async (lat: number, lon: number, asRecalc: boolean) => {
     if (!mapRef.current) return;
-    const sign = recalcCountRef.current % 2 === 0 ? 1 : -1;
-    const points: L.LatLngExpression[] = [
+    const token = ++routingTokenRef.current;
+    setIsRouting(true);
+    const waypoints: LatLng[] = [
       [lat, lon],
-      ...routeStops.map((s, i) => [
-        s.lat + (i > 0 ? sign * offset : 0),
-        s.lng + (i > 0 ? sign * offset * 0.6 : 0),
-      ] as L.LatLngExpression),
+      ...activeRouteStops.map(s => [s.lat, s.lng] as LatLng),
     ];
 
-    if (routePolylineRef.current) {
-      routePolylineRef.current.setLatLngs(points);
-      routePolylineRef.current.setStyle({ color, weight: color === '#f59e0b' ? 4 : 3 });
-    } else {
-      routePolylineRef.current = L.polyline(points, {
-        color,
-        weight: 3,
-        opacity: 0.85,
-      }).addTo(mapRef.current).bringToBack();
+    const path = asRecalc
+      ? await fetchAlternateStreetRoute(waypoints, prevActivePathRef.current, 5)
+      : await fetchStreetRoute(waypoints);
+
+    if (token !== routingTokenRef.current || !mapRef.current) {
+      setIsRouting(false);
+      return;
     }
-  }, []);
+
+    const previous = routePolylineRef.current;
+    if (previous) {
+      previous.setStyle({ opacity: 0 });
+      setTimeout(() => {
+        previous.remove();
+      }, 500);
+    }
+
+    const baseOpts: L.PolylineOptions = asRecalc
+      ? {
+          color: '#f59e0b',
+          weight: 5,
+          opacity: 0.95,
+          dashArray: '10 8',
+          className: 'route-polyline route-recalc',
+        }
+      : {
+          color: '#2563eb',
+          weight: 4,
+          opacity: 0.9,
+          className: 'route-polyline route-initial',
+        };
+
+    routePolylineRef.current = L.polyline(path, {
+      ...baseOpts,
+      lineJoin: 'round',
+      lineCap: 'round',
+    }).addTo(mapRef.current);
+
+    prevActivePathRef.current = path;
+
+    if (asRecalc) setHasRecalculated(true);
+    setIsRouting(false);
+  }, [setHasRecalculated]);
 
   // Init map once
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
     const map = L.map(mapContainerRef.current, { zoomControl: true })
-      .setView([24.7136, 46.6753], 12);
+      .setView([BASE_LAT, BASE_LON], 12);
     mapRef.current = map;
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -108,28 +183,39 @@ export function LiveFleetMapPage() {
       maxZoom: 19,
     }).addTo(map);
 
-    // Draw initial route from base EV-02 position
-    const initialPoints: L.LatLngExpression[] = [
-      [BASE_LAT, BASE_LON],
-      ...routeStops.map(s => [s.lat, s.lng] as L.LatLngExpression),
-    ];
-    routePolylineRef.current = L.polyline(initialPoints, {
-      color: '#2563eb',
-      weight: 3,
-      opacity: 0.85,
-    }).addTo(map).bringToBack();
+    // Render every delivery stop with the proper visual hierarchy
+    const { finalMarker } = renderStopMarkers(
+      map,
+      mockDeliveryStops,
+      t('fleet.finalStop'),
+      activeFinalStopId
+    );
+    finalStopMarkerRef.current = finalMarker;
 
-    // Destination flag marker at final stop
-    const finalStop = routeStops[routeStops.length - 1];
-    if (finalStop) {
-      L.circleMarker([finalStop.lat, finalStop.lng], {
-        radius: 8,
-        fillColor: '#dc2626',
-        color: '#fff',
-        weight: 2,
-        fillOpacity: 1,
-      }).addTo(map).bindTooltip('Destination', { permanent: false });
-    }
+    // Compute and draw each non-active vehicle's planned route in a muted color
+    mockVehicles.filter(v => v.id !== 'V002').forEach(v => {
+      const stops = stopsForVehicle(v);
+      if (stops.length < 1) return;
+      const waypoints: LatLng[] = [
+        [v.lat, v.lng],
+        ...stops.map(s => [s.lat, s.lng] as LatLng),
+      ];
+      fetchStreetRoute(waypoints).then(path => {
+        if (!mapRef.current) return;
+        const polyline = L.polyline(path, {
+          color: ROUTE_COLORS[v.id] ?? '#6b7280',
+          weight: 3,
+          opacity: 0.45,
+          lineJoin: 'round',
+          lineCap: 'round',
+        }).addTo(mapRef.current);
+        polyline.bringToBack();
+        vehicleRouteLayersRef.current.set(v.id, polyline);
+      });
+    });
+
+    // Compute the active driver's initial street-following route (blue solid)
+    computeRoute(BASE_LAT, BASE_LON, false);
 
     // Static mock vehicle markers (excluding EV-02)
     mockVehicles.filter(v => v.id !== 'V002').forEach(v => {
@@ -161,11 +247,32 @@ export function LiveFleetMapPage() {
       mapRef.current = null;
       ev02MarkerRef.current = null;
       routePolylineRef.current = null;
+      finalStopMarkerRef.current = null;
       mockMarkerRefs.current.clear();
+      vehicleRouteLayersRef.current.clear();
     };
-  }, [selectVehicle]);
+    // t intentionally not in deps: language changes update the icon via a separate effect
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectVehicle, computeRoute]);
 
-  // Update EV-02 marker + route as vehicle moves
+  // Highlight the selected vehicle's planned-route polyline
+  useEffect(() => {
+    vehicleRouteLayersRef.current.forEach((polyline, vehicleId) => {
+      const isSelected = vehicleId === selectedVehicleId;
+      polyline.setStyle({
+        opacity: isSelected ? 0.9 : 0.4,
+        weight: isSelected ? 5 : 3,
+      });
+      if (isSelected) polyline.bringToFront();
+    });
+  }, [selectedVehicleId]);
+
+  // Update final-stop marker label when language changes
+  useEffect(() => {
+    finalStopMarkerRef.current?.setIcon(buildFinalStopIcon(t('fleet.finalStop')));
+  }, [t]);
+
+  // Update EV-02 marker as vehicle moves (route is recomputed only on recalc, not per tick)
   useEffect(() => {
     if (!data?.gps_fix) return;
     if (ev02MarkerRef.current) {
@@ -174,24 +281,31 @@ export function LiveFleetMapPage() {
         `EV-02 | ${data.speed.toFixed(1)} km/h | ${data.motion} | ${data.temp.toFixed(1)}°C`
       );
     }
-    drawRoute(data.lat, data.lon);
-  }, [data, drawRoute]);
+  }, [data]);
 
-  // Flash route amber when recalculation completes, then show new path in blue
+  // When automatic recalculation completes, redraw as the amber dashed "recalculated" route
   useEffect(() => {
     const wasRecalculating = prevIsRecalcRef.current;
     prevIsRecalcRef.current = isRecalculating;
     if (!wasRecalculating || isRecalculating) return;
 
-    recalcCountRef.current += 1;
     const lat = data?.lat ?? BASE_LAT;
     const lon = data?.lon ?? BASE_LON;
-    const offset = recalcCountRef.current * 0.0003;
+    computeRoute(lat, lon, true);
+  }, [isRecalculating, data, computeRoute]);
 
-    drawRoute(lat, lon, '#f59e0b', offset);
-    const timer = setTimeout(() => drawRoute(lat, lon, '#2563eb', offset), 1500);
-    return () => clearTimeout(timer);
-  }, [isRecalculating, data, drawRoute]);
+  // React to manual recalc triggered from any view
+  useEffect(() => {
+    if (manualRecalcTick === prevManualRecalcTickRef.current) return;
+    prevManualRecalcTickRef.current = manualRecalcTick;
+    const lat = data?.lat ?? BASE_LAT;
+    const lon = data?.lon ?? BASE_LON;
+    computeRoute(lat, lon, true);
+  }, [manualRecalcTick, data, computeRoute]);
+
+  const handleManualRecalc = () => {
+    triggerManualRecalc();
+  };
 
   const reliabilityColor =
     systemReliability >= 97 ? 'bg-green-100 text-green-700' :
@@ -266,6 +380,16 @@ export function LiveFleetMapPage() {
           <Zap className="w-3 h-3" /> Track EV-02
         </button>
 
+        <button
+          onClick={handleManualRecalc}
+          disabled={isRouting}
+          className="px-2 py-1 text-xs bg-blue-50 border border-blue-300 text-blue-700 rounded hover:bg-blue-100 disabled:opacity-60 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+          title={t('fleet.recalculate')}
+        >
+          <RefreshCw className={`w-3 h-3 ${isRouting ? 'animate-spin' : ''}`} />
+          {isRouting ? t('fleet.routing') : t('fleet.recalculate')}
+        </button>
+
         <div className="ml-auto flex items-center gap-2">
           {deviceIpEdit ? (
             <input
@@ -302,6 +426,26 @@ export function LiveFleetMapPage() {
               ⚡ {t('iot.recalculating')}
             </div>
           )}
+
+          {/* Route legend (bottom-left) */}
+          <div
+            className="absolute bottom-2 left-2 bg-white/95 backdrop-blur border border-gray-200 shadow-md rounded-md px-2.5 py-1.5 text-[10px] text-gray-700"
+            style={{ zIndex: 1000 }}
+          >
+            <div className="font-semibold text-gray-900 mb-1">{t('fleet.legend.title')}</div>
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <svg width="22" height="6" viewBox="0 0 22 6" aria-hidden="true">
+                <line x1="0" y1="3" x2="22" y2="3" stroke="#2563eb" strokeWidth="3" strokeLinecap="round" />
+              </svg>
+              <span className={hasRecalculated ? 'text-gray-400' : ''}>{t('fleet.legend.original')}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <svg width="22" height="6" viewBox="0 0 22 6" aria-hidden="true">
+                <line x1="0" y1="3" x2="22" y2="3" stroke="#f59e0b" strokeWidth="4" strokeDasharray="4 3" strokeLinecap="round" />
+              </svg>
+              <span className={hasRecalculated ? 'font-semibold text-amber-700' : ''}>{t('fleet.legend.recalc')}</span>
+            </div>
+          </div>
         </div>
 
         {/* RIGHT SIDEBAR */}

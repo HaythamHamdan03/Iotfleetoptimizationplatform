@@ -230,6 +230,13 @@ const en: Record<string, string> = {
   'fleet.contactDriver': 'Contact Driver',
   'fleet.battery': 'Battery',
   'fleet.fuel': 'Fuel',
+  'fleet.destination': 'Destination',
+  'fleet.finalStop': 'FINAL STOP',
+  'fleet.recalculate': 'Recalculate Route',
+  'fleet.routing': 'Routing…',
+  'fleet.legend.title': 'Route Legend',
+  'fleet.legend.original': 'Original route',
+  'fleet.legend.recalc': 'Recalculated route',
 
   // RouteOptimizationPage
   'route.title': 'Route Optimization',
@@ -587,6 +594,13 @@ const ar: Record<string, string> = {
   'fleet.contactDriver': 'التواصل مع السائق',
   'fleet.battery': 'البطارية',
   'fleet.fuel': 'الوقود',
+  'fleet.destination': 'الوجهة',
+  'fleet.finalStop': 'المحطة الأخيرة',
+  'fleet.recalculate': 'إعادة حساب المسار',
+  'fleet.routing': 'جارٍ الحساب…',
+  'fleet.legend.title': 'مفتاح المسار',
+  'fleet.legend.original': 'المسار الأصلي',
+  'fleet.legend.recalc': 'المسار المعاد حسابه',
 
   // RouteOptimizationPage
   'route.title': 'تحسين المسار',

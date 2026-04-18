@@ -7,7 +7,8 @@ export function DriverHomePage() {
   const { t, isRTL } = useLanguage();
   const completedStops = mockDeliveryStops.filter((s) => s.status === 'completed').length;
   const totalStops = mockDeliveryStops.length;
-  const totalPackages = mockDeliveryStops.reduce((sum, s) => sum + s.packageCount, 0);
+  const pendingStops = mockDeliveryStops.filter((s) => s.status !== 'completed').length;
+  const totalPackages = mockDeliveryStops.reduce((sum, s) => sum + (s.packageCount ?? 0), 0);
 
   return (
     <div className={`p-4 space-y-4 ${isRTL ? 'text-right' : ''}`}>
@@ -61,7 +62,7 @@ export function DriverHomePage() {
             </div>
             <div className={isRTL ? 'text-right' : ''}>
               <p className="text-xs text-gray-600">{t('driver.packages')}</p>
-              <p className="text-lg font-semibold text-gray-900">{totalPackages}</p>
+              <p className="text-lg font-semibold text-gray-900">{totalPackages > 0 ? totalPackages : pendingStops}</p>
             </div>
           </div>
         </div>
@@ -92,9 +93,10 @@ export function DriverHomePage() {
                   <MapPin className="w-5 h-5 text-blue-700" />
                 </div>
                 <div className={`flex-1 ${isRTL ? 'text-right' : ''}`}>
-                  <p className="font-medium text-gray-900">{stop.address}</p>
+                  <p className="font-medium text-gray-900">{stop.name ?? stop.address}</p>
                   <p className="text-sm text-gray-600 mt-1">
-                    {stop.packageCount} {t('nav2.packages')} • ETA: {stop.estimatedTime}
+                    {stop.packageCount !== undefined && `${stop.packageCount} ${t('nav2.packages')} • `}
+                    ETA: {stop.scheduledTime}
                   </p>
                 </div>
               </div>
@@ -122,8 +124,11 @@ export function DriverHomePage() {
                 <CheckCircle2 className="w-4 h-4 text-green-700" />
               </div>
               <div className={`flex-1 ${isRTL ? 'text-right' : ''}`}>
-                <p className="text-sm font-medium text-gray-900">{stop.address}</p>
-                <p className="text-xs text-gray-600">{stop.packageCount} {t('nav2.packages')} • {stop.estimatedTime}</p>
+                <p className="text-sm font-medium text-gray-900">{stop.name ?? stop.address}</p>
+                <p className="text-xs text-gray-600">
+                  {stop.packageCount !== undefined && `${stop.packageCount} ${t('nav2.packages')} • `}
+                  {stop.actualTime ?? stop.scheduledTime}
+                </p>
               </div>
             </div>
           ))}
