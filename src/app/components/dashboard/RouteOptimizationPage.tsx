@@ -2,6 +2,8 @@ import React from 'react';
 import { Settings, Play, DollarSign, Leaf, Users, CheckCircle2, TrendingDown } from 'lucide-react';
 import { mockOptimizationResults } from '@/app/data/mockData';
 import { useLanguage } from '@/app/i18n/LanguageContext';
+import { Button } from '@/app/components/ui/button';
+import { toast } from 'sonner';
 
 export function RouteOptimizationPage() {
   const { t, isRTL } = useLanguage();
@@ -31,7 +33,7 @@ export function RouteOptimizationPage() {
         <p className="text-gray-600">{t('route.subtitle')}</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Controls */}
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -57,23 +59,28 @@ export function RouteOptimizationPage() {
               ))}
             </div>
 
-            <button onClick={handleOptimize} disabled={isOptimizing}
-              className="w-full mt-6 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed">
+            <Button
+              variant="default"
+              size="lg"
+              onClick={handleOptimize}
+              disabled={isOptimizing}
+              className="w-full mt-6 transition-colors duration-150"
+            >
               {isOptimizing ? (
                 <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>{t('route.optimizing')}</>
               ) : (
                 <><Play className="w-5 h-5" />{t('route.runOptimization')}</>
               )}
-            </button>
+            </Button>
           </div>
 
           <div className="bg-gray-50 rounded-lg border border-gray-200 p-6">
             <h3 className="text-sm font-semibold text-gray-900 mb-3">{t('route.fleetSummary')}</h3>
             <div className="space-y-2 text-sm text-gray-600">
               {[
-                { label: 'Fleet Size:', value: `6 ${t('route.vehicles')}` },
-                { label: 'Active Routes:', value: `3 ${t('route.routes')}` },
-                { label: 'Algorithm:', value: 'Genetic Algorithm' },
+                { label: t('optimization.fleetSize'), value: `6 ${t('route.vehicles')}` },
+                { label: t('optimization.activeRoutes'), value: `3 ${t('route.routes')}` },
+                { label: t('optimization.algorithm'), value: t('optimization.geneticAlgorithm') },
                 { label: `${t('route.solveTime')}:`, value: '2s' },
               ].map(({ label, value }) => (
                 <div key={label} className={`flex justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
@@ -149,12 +156,12 @@ export function RouteOptimizationPage() {
               </div>
 
               <div className={`flex gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                <button className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+                <Button variant="default" size="lg" onClick={handleOptimize} className="flex-1 transition-colors duration-150">
                   {t('home.runOptimization')}
-                </button>
-                <button className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium">
+                </Button>
+                <Button variant="outline" size="lg" onClick={() => toast(t('home.reportComingSoon'))} className="transition-colors duration-150">
                   {t('analytics.export')}
-                </button>
+                </Button>
               </div>
             </div>
           )}

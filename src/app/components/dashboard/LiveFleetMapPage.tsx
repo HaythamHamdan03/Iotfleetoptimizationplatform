@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
 import {
-  Wifi, WifiOff, Satellite, Settings, ChevronDown, ChevronUp,
+  Wifi, WifiOff, Satellite, Settings, ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
   Thermometer, Wind, Gauge, MapPin, CheckCircle2, Battery, Truck, Zap, RefreshCw,
 } from 'lucide-react';
+import { Button } from '@/app/components/ui/button';
+import { Skeleton } from '@/app/components/ui/skeleton';
 import { mockVehicles, mockDeliveryStops } from '@/app/data/mockData';
 import type { Vehicle, DeliveryStop } from '@/app/data/mockData';
 import { useLanguage } from '@/app/i18n/LanguageContext';
@@ -99,6 +101,19 @@ export function LiveFleetMapPage() {
   const [deviceIp, setDeviceIp] = useState(IOT_CONFIG.DEVICE_URL.replace('http://', ''));
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [isRouting, setIsRouting] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() =>
+    typeof window === 'undefined' ? true : window.innerWidth >= 1024
+  );
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024) setSidebarOpen(false);
+      else setSidebarOpen(true);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const unresolvedDisruptions = disruptions.filter((d: Disruption) => d.resolvedAt === null);
   const selectedVehicle = selectedVehicleId === 'EV-02'
@@ -238,7 +253,7 @@ export function LiveFleetMapPage() {
       weight: 3,
       fillOpacity: 0.9,
     }).addTo(map);
-    ev02.bindPopup('EV-02 | loading...');
+    ev02.bindPopup(t('fleet.vehicleLoading'));
     ev02.on('click', () => setSelectedVehicleId('EV-02'));
     ev02MarkerRef.current = ev02;
 
@@ -415,7 +430,7 @@ export function LiveFleetMapPage() {
       <div className={`flex flex-1 min-h-0 ${isRTL ? 'flex-row-reverse' : ''}`}>
 
         {/* MAP — isolate contains Leaflet z-indexes */}
-        <div className="flex-1 relative isolate">
+        <div className="flex-1 relative isolate" role="application" aria-label={t('fleet.mapAriaLabel')}>
           <div ref={mapContainerRef} className="absolute inset-0" />
 
           {isRecalculating && (
@@ -435,21 +450,40 @@ export function LiveFleetMapPage() {
             <div className="font-semibold text-gray-900 mb-1">{t('fleet.legend.title')}</div>
             <div className="flex items-center gap-1.5 mb-0.5">
               <svg width="22" height="6" viewBox="0 0 22 6" aria-hidden="true">
-                <line x1="0" y1="3" x2="22" y2="3" stroke="#2563eb" strokeWidth="3" strokeLinecap="round" />
+                <line x1="0" y1="3" x2="22" y2="3" stroke="hsl(var(--chart-1))" strokeWidth="3" strokeLinecap="round" />
               </svg>
               <span className={hasRecalculated ? 'text-gray-400' : ''}>{t('fleet.legend.original')}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <svg width="22" height="6" viewBox="0 0 22 6" aria-hidden="true">
-                <line x1="0" y1="3" x2="22" y2="3" stroke="#f59e0b" strokeWidth="4" strokeDasharray="4 3" strokeLinecap="round" />
+                <line x1="0" y1="3" x2="22" y2="3" stroke="hsl(var(--chart-4))" strokeWidth="4" strokeDasharray="4 3" strokeLinecap="round" />
               </svg>
               <span className={hasRecalculated ? 'font-semibold text-amber-700' : ''}>{t('fleet.legend.recalc')}</span>
             </div>
           </div>
         </div>
 
+        {/* SIDEBAR TOGGLE — anchored on the inner edge of the sidebar */}
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => setSidebarOpen(o => !o)}
+          aria-label={sidebarOpen ? t('fleet.collapseSidebar') : t('fleet.expandSidebar')}
+          aria-expanded={sidebarOpen}
+          className={`self-center z-10 h-10 w-6 rounded-none border-y border-gray-200 bg-white hover:bg-muted transition-colors duration-150 ${isRTL ? 'border-l-0 border-r' : 'border-r-0 border-l'}`}
+        >
+          {sidebarOpen
+            ? (isRTL ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />)
+            : (isRTL ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />)}
+        </Button>
+
         {/* RIGHT SIDEBAR */}
-        <div className={`w-80 bg-white overflow-y-auto flex-shrink-0 ${isRTL ? 'border-r' : 'border-l'} border-gray-200 flex flex-col`}>
+        <div
+          className={`bg-white overflow-y-auto flex-shrink-0 ${isRTL ? 'border-r' : 'border-l'} border-gray-200 flex flex-col transition-all duration-300 ${
+            sidebarOpen ? 'w-80' : 'w-0 overflow-hidden border-0'
+          }`}
+          aria-hidden={!sidebarOpen}
+        >
 
           {/* Selected vehicle detail */}
           {selectedVehicleId && (
@@ -544,18 +578,26 @@ export function LiveFleetMapPage() {
           {/* Fleet Vehicles */}
           <div className="p-4 flex-1">
             <h3 className="text-sm font-semibold text-gray-900 mb-1">{t('home.fleetStatus')}</h3>
-            <p className="text-xs text-gray-400 mb-3">Click a vehicle to view details &amp; pan map</p>
+            <p className="text-xs text-gray-400 mb-3">{t('fleet.clickVehicleHint')}</p>
+            {mockVehicles.length === 0 && !data && (
+              <div className="space-y-2" aria-hidden="true">
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+              </div>
+            )}
             <div className="space-y-2">
 
               <button
                 onClick={() => data && selectVehicle('EV-02', data.lat, data.lon)}
-                className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                aria-label="EV-02 live vehicle"
+                className={`w-full ${isRTL ? 'text-right' : 'text-left'} p-3 rounded-lg border transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
                   selectedVehicleId === 'EV-02' ? 'border-blue-500 bg-blue-50' : 'border-blue-200 bg-blue-50/50 hover:border-blue-400'
                 }`}
               >
-                <div className="flex items-center gap-2">
+                <div className={`flex items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
                   <Battery className="w-4 h-4 text-blue-600" />
-                  <span className="text-sm font-semibold text-gray-900">EV-02</span>
+                  <span className="text-sm font-semibold text-gray-900 truncate" title="EV-02">EV-02</span>
                   <span className="px-1.5 py-0.5 rounded text-xs font-bold bg-blue-600 text-white">● {t('iot.liveIndicator')}</span>
                 </div>
                 <p className="text-xs text-gray-500 mt-0.5">Mohammed Al-Saud</p>
@@ -567,30 +609,34 @@ export function LiveFleetMapPage() {
                 const matchedDisruption = disruptions.find(
                   (d: Disruption) => d.vehicleId !== 'EV-02' && d.resolvedAt === null
                 );
+                const statusLabel = v.status === 'on-route' ? t('fleet.onRoute')
+                  : v.status === 'delayed' ? t('fleet.delayed') : t('fleet.idle');
                 return (
                   <button
                     key={v.id}
                     onClick={() => selectVehicle(v.id, v.lat, v.lng)}
-                    className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                    aria-label={`${v.name} — ${statusLabel}`}
+                    className={`w-full ${isRTL ? 'text-right' : 'text-left'} p-3 rounded-lg border transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
                       selectedVehicleId === v.id ? 'border-blue-500 bg-blue-50' :
                       isDelayed ? 'border-red-200 bg-red-50 hover:border-red-400' :
                       'border-gray-200 hover:bg-gray-50 hover:border-gray-300'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
+                    <div className={`flex items-center justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
+                      <div className={`flex items-center gap-2 min-w-0 ${isRTL ? 'flex-row-reverse' : ''}`}>
                         {v.type === 'ev'
-                          ? <Battery className="w-4 h-4 text-green-600" />
-                          : <Truck className="w-4 h-4 text-gray-600" />}
-                        <span className="text-sm font-medium text-gray-900">{v.name}</span>
+                          ? <Battery className="w-4 h-4 text-green-600 flex-shrink-0" aria-hidden="true" />
+                          : <Truck className="w-4 h-4 text-gray-600 flex-shrink-0" aria-hidden="true" />}
+                        <span className="text-sm font-medium text-gray-900 truncate" title={v.name}>{v.name}</span>
                         {isDelayed && (
-                          <span className="px-1.5 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700">DISRUPTED</span>
+                          <span className="px-1.5 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700 flex-shrink-0">{t('fleet.disrupted')}</span>
                         )}
                       </div>
                       {isDelayed && matchedDisruption && (
                         <button
                           onClick={e => { e.stopPropagation(); acknowledgeDisruption(matchedDisruption.id); }}
-                          className="text-xs text-green-600 hover:text-green-700 font-medium flex items-center gap-1"
+                          aria-label={t('iot.resolve')}
+                          className="text-xs text-green-600 hover:text-green-700 font-medium flex items-center gap-1 transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5" />{t('iot.resolve')}
                         </button>
@@ -600,7 +646,7 @@ export function LiveFleetMapPage() {
                     <p className={`text-xs mt-0.5 font-medium ${
                       v.status === 'on-route' ? 'text-green-600' :
                       v.status === 'delayed' ? 'text-red-600' : 'text-gray-500'
-                    }`}>{v.status}</p>
+                    }`}>● {statusLabel}</p>
                   </button>
                 );
               })}
@@ -616,7 +662,7 @@ export function LiveFleetMapPage() {
           className={`w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition-colors ${isRTL ? 'flex-row-reverse' : ''}`}
         >
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-gray-900">Disruption Log</span>
+            <span className="text-sm font-semibold text-gray-900">{t('fleet.disruptionLog')}</span>
             {unresolvedDisruptions.length > 0 && (
               <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
                 {unresolvedDisruptions.length}

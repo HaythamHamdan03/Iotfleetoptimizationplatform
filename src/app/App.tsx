@@ -15,6 +15,7 @@ import { NotificationsPage } from '@/app/components/mobile/NotificationsPage';
 import { ProfilePage } from '@/app/components/mobile/ProfilePage';
 import { LanguageProvider, useLanguage } from '@/app/i18n/LanguageContext';
 import { IoTProvider } from '@/app/context/IoTContext';
+import { Toaster } from '@/app/components/ui/sonner';
 
 function AppInner() {
   const [viewMode, setViewMode] = React.useState<'web' | 'mobile'>('web');
@@ -27,20 +28,24 @@ function AppInner() {
         <div className="flex gap-2 items-center">
           <button
             onClick={() => setViewMode('web')}
-            className={`px-4 py-2 rounded text-sm transition-colors ${
+            aria-label={t('app.webDashboard')}
+            aria-pressed={viewMode === 'web'}
+            className={`px-4 py-2 rounded text-sm transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
               viewMode === 'web'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-foreground hover:bg-accent'
             }`}
           >
             {t('app.webDashboard')}
           </button>
           <button
             onClick={() => setViewMode('mobile')}
-            className={`px-4 py-2 rounded text-sm transition-colors ${
+            aria-label={t('app.mobileApp')}
+            aria-pressed={viewMode === 'mobile'}
+            className={`px-4 py-2 rounded text-sm transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
               viewMode === 'mobile'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-foreground hover:bg-accent'
             }`}
           >
             {t('app.mobileApp')}
@@ -82,6 +87,7 @@ export default function App() {
       <IoTProvider>
         <Router>
           <AppInner />
+          <Toaster position="top-right" richColors closeButton />
         </Router>
       </IoTProvider>
     </LanguageProvider>

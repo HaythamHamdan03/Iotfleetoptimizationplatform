@@ -1,12 +1,54 @@
 import React from 'react';
+import { toast } from 'sonner';
 import { Settings, Truck, Sliders, Globe, Save } from 'lucide-react';
 import { useLanguage, type Language } from '@/app/i18n/LanguageContext';
+import { Button } from '@/app/components/ui/button';
+
+const STORAGE_KEY = 'fleetiot-settings-weights';
+const DEFAULTS = { cost: 40, co2: 30, workload: 30 };
 
 export function SettingsPage() {
   const { t, language, setLanguage, isRTL } = useLanguage();
-  const [costWeight, setCostWeight] = React.useState(40);
-  const [co2Weight, setCo2Weight] = React.useState(30);
-  const [workloadWeight, setWorkloadWeight] = React.useState(30);
+  const [costWeight, setCostWeight] = React.useState(DEFAULTS.cost);
+  const [co2Weight, setCo2Weight] = React.useState(DEFAULTS.co2);
+  const [workloadWeight, setWorkloadWeight] = React.useState(DEFAULTS.workload);
+
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<typeof DEFAULTS>;
+      if (typeof parsed.cost === 'number') setCostWeight(parsed.cost);
+      if (typeof parsed.co2 === 'number') setCo2Weight(parsed.co2);
+      if (typeof parsed.workload === 'number') setWorkloadWeight(parsed.workload);
+    } catch {
+      // ignore corrupted storage
+    }
+  }, []);
+
+  const handleSave = () => {
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ cost: costWeight, co2: co2Weight, workload: workloadWeight }),
+      );
+      toast.success(t('settings.savedToast'));
+    } catch {
+      toast.error(t('settings.saveErrorToast'));
+    }
+  };
+
+  const handleReset = () => {
+    setCostWeight(DEFAULTS.cost);
+    setCo2Weight(DEFAULTS.co2);
+    setWorkloadWeight(DEFAULTS.workload);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+    toast.success(t('settings.resetToast'));
+  };
 
   return (
     <div className={`p-8 ${isRTL ? 'text-right' : ''}`}>
@@ -33,32 +75,32 @@ export function SettingsPage() {
           <div className="p-6 space-y-6">
             <div className="grid grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.iceTrucksCount')}</label>
-                <input type="number" defaultValue={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <label htmlFor="ice-trucks-count" className="block text-sm font-medium text-gray-700 mb-2">{t('settings.iceTrucksCount')}</label>
+                <input id="ice-trucks-count" type="number" defaultValue={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.iceTruckCapacity')}</label>
-                <input type="number" defaultValue={1000} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.evCount')}</label>
-                <input type="number" defaultValue={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.evCapacity')}</label>
-                <input type="number" defaultValue={800} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <label htmlFor="ice-truck-capacity" className="block text-sm font-medium text-gray-700 mb-2">{t('settings.iceTruckCapacity')}</label>
+                <input id="ice-truck-capacity" type="number" defaultValue={1000} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.startTime')}</label>
-                <input type="time" defaultValue="08:00" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <label htmlFor="ev-count" className="block text-sm font-medium text-gray-700 mb-2">{t('settings.evCount')}</label>
+                <input id="ev-count" type="number" defaultValue={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.endTime')}</label>
-                <input type="time" defaultValue="18:00" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <label htmlFor="ev-capacity" className="block text-sm font-medium text-gray-700 mb-2">{t('settings.evCapacity')}</label>
+                <input id="ev-capacity" type="number" defaultValue={800} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <label htmlFor="start-time" className="block text-sm font-medium text-gray-700 mb-2">{t('settings.startTime')}</label>
+                <input id="start-time" type="time" defaultValue="08:00" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" />
+              </div>
+              <div>
+                <label htmlFor="end-time" className="block text-sm font-medium text-gray-700 mb-2">{t('settings.endTime')}</label>
+                <input id="end-time" type="time" defaultValue="18:00" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" />
               </div>
             </div>
           </div>
@@ -80,16 +122,16 @@ export function SettingsPage() {
 
           <div className="p-6 space-y-6">
             {[
-              { label: t('settings.costWeight'), value: costWeight, setter: setCostWeight, accent: 'accent-blue-600' },
-              { label: t('settings.co2Weight'), value: co2Weight, setter: setCo2Weight, accent: 'accent-green-600' },
-              { label: t('settings.workloadWeight'), value: workloadWeight, setter: setWorkloadWeight, accent: 'accent-purple-600' },
+              { id: 'cost-weight', label: t('settings.costWeight'), value: costWeight, setter: setCostWeight, accent: 'accent-blue-600' },
+              { id: 'co2-weight', label: t('settings.co2Weight'), value: co2Weight, setter: setCo2Weight, accent: 'accent-green-600' },
+              { id: 'workload-weight', label: t('settings.workloadWeight'), value: workloadWeight, setter: setWorkloadWeight, accent: 'accent-purple-600' },
             ].map((w) => (
               <div key={w.label}>
                 <div className={`flex items-center justify-between mb-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                  <label className="text-sm font-medium text-gray-700">{w.label}</label>
+                  <label htmlFor={w.id} className="text-sm font-medium text-gray-700">{w.label}</label>
                   <span className="text-sm font-semibold text-gray-900">{w.value}%</span>
                 </div>
-                <input type="range" min="0" max="100" value={w.value}
+                <input id={w.id} type="range" min="0" max="100" value={w.value}
                   onChange={(e) => w.setter(parseInt(e.target.value))}
                   className={`w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer ${w.accent}`} />
               </div>
@@ -129,26 +171,33 @@ export function SettingsPage() {
 
           <div className="p-6 space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">{t('settings.interfaceLang')}</label>
+              <span className="block text-sm font-medium text-gray-700 mb-3">{t('settings.interfaceLang')}</span>
               <div className="grid grid-cols-2 gap-4">
                 {(['en', 'ar'] as Language[]).map((lang) => (
                   <button
                     key={lang}
                     onClick={() => setLanguage(lang)}
-                    className={`p-4 rounded-lg border-2 transition-all ${isRTL ? 'text-right' : 'text-left'} ${
+                    aria-label={lang === 'en' ? 'English' : 'العربية'}
+                    aria-pressed={language === lang}
+                    className={`p-4 rounded-lg border-2 transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${isRTL ? 'text-right' : 'text-left'} ${
                       language === lang ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
                     }`}
                   >
                     <p className="font-medium text-gray-900">{lang === 'en' ? 'English' : 'العربية'}</p>
-                    <p className="text-sm text-gray-600 mt-1">{lang === 'en' ? 'International (LTR)' : 'Arabic (RTL)'}</p>
+                    <p className="text-sm text-gray-600 mt-1">
+                      {lang === 'en' ? `International (${t('settings.ltr')})` : `Arabic (${t('settings.rtl')})`}
+                    </p>
                   </button>
                 ))}
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.currency')}</label>
-              <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <label htmlFor="currency-select" className="block text-sm font-medium text-gray-700 mb-2">{t('settings.currency')}</label>
+              <select
+                id="currency-select"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
                 <option value="sar">Saudi Riyal (SAR)</option>
                 <option value="usd">US Dollar (USD)</option>
                 <option value="eur">Euro (EUR)</option>
@@ -159,13 +208,23 @@ export function SettingsPage() {
 
         {/* Save/Reset */}
         <div className={`flex gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
-          <button className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+          <Button
+            variant="default"
+            size="lg"
+            onClick={handleSave}
+            className="flex-1 transition-colors duration-150"
+          >
             <Save className="w-5 h-5" />
             {t('settings.save')}
-          </button>
-          <button className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium">
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={handleReset}
+            className="transition-colors duration-150"
+          >
             {t('settings.reset')}
-          </button>
+          </Button>
         </div>
 
         {/* System Info */}

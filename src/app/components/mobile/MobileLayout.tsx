@@ -70,7 +70,7 @@ export function MobileLayout() {
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="flex-shrink-0 bg-white border-t border-gray-200 safe-area-bottom">
+      <nav className="flex-shrink-0 bg-white border-t border-gray-200 safe-area-bottom" aria-label={t('mobile.appTitle')}>
         <div className="grid grid-cols-5">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -79,12 +79,14 @@ export function MobileLayout() {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex flex-col items-center justify-center py-3 px-2 transition-colors ${
-                  active ? 'text-blue-600' : 'text-gray-600'
+                aria-label={item.label}
+                aria-current={active ? 'page' : undefined}
+                className={`flex flex-col items-center justify-center py-3 px-2 transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none focus-visible:ring-inset ${
+                  active ? 'text-blue-600' : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                <Icon className={`w-6 h-6 mb-1 ${active ? 'stroke-2' : ''}`} />
-                <span className="text-xs">{item.label}</span>
+                <Icon className={`w-6 h-6 mb-1 transition-transform duration-150 ${active ? 'stroke-2 scale-110' : ''}`} aria-hidden="true" />
+                <span className="hidden xs:block text-[10px] sm:text-xs">{item.label}</span>
               </Link>
             );
           })}

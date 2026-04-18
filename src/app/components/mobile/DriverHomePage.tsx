@@ -1,10 +1,17 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MapPin, Clock, Package, TrendingUp, CheckCircle2 } from 'lucide-react';
 import { mockDeliveryStops } from '@/app/data/mockData';
 import { useLanguage } from '@/app/i18n/LanguageContext';
 
-export function DriverHomePage() {
+interface DriverHomePageProps {
+  routeLabel?: string;
+}
+
+export function DriverHomePage({ routeLabel }: DriverHomePageProps = {}) {
   const { t, isRTL } = useLanguage();
+  const navigate = useNavigate();
+  const displayedRouteLabel = routeLabel ?? t('route.defaultLabel');
   const completedStops = mockDeliveryStops.filter((s) => s.status === 'completed').length;
   const totalStops = mockDeliveryStops.length;
   const pendingStops = mockDeliveryStops.filter((s) => s.status !== 'completed').length;
@@ -23,7 +30,7 @@ export function DriverHomePage() {
         <div className={`flex items-start justify-between mb-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
           <div className={isRTL ? 'text-right' : ''}>
             <p className="text-sm text-blue-100 mb-1">{t('driver.activeRoute')}</p>
-            <h3 className="text-2xl font-semibold">Route #R002</h3>
+            <h3 className="text-2xl font-semibold">{displayedRouteLabel}</h3>
           </div>
           <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center">
             <MapPin className="w-6 h-6" />
@@ -100,7 +107,10 @@ export function DriverHomePage() {
                   </p>
                 </div>
               </div>
-              <button className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+              <button
+                onClick={() => navigate('/navigation')}
+                className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-150 font-medium focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none"
+              >
                 {t('driver.startNavigation')}
               </button>
             </div>

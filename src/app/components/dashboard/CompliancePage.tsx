@@ -1,7 +1,13 @@
 import React from 'react';
-import { CheckCircle2, Clock, FileText, ExternalLink, Languages } from 'lucide-react';
+import { CheckCircle2, Clock, FileText, ExternalLink, Languages, FileX } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useLanguage } from '@/app/i18n/LanguageContext';
+import { Button } from '@/app/components/ui/button';
+import { EmptyState } from '@/app/components/ui/EmptyState';
+import {
+  Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+} from '@/app/components/ui/table';
+import { useMediaQuery } from '@/app/hooks/useMediaQuery';
 
 type Category = 'traffic' | 'delivery' | 'arabic' | 'data';
 type Status = 'implemented' | 'planned';
@@ -46,6 +52,7 @@ type FilterKey = 'all' | Category;
 export function CompliancePage() {
   const { t, isRTL, language, setLanguage } = useLanguage();
   const [filter, setFilter] = React.useState<FilterKey>('all');
+  const isMobile = useMediaQuery('(max-width: 767px)');
 
   const filtered = filter === 'all' ? regulations : regulations.filter(r => r.cat === filter);
   const total = regulations.length;
@@ -97,34 +104,77 @@ export function CompliancePage() {
         {filterTabs.map((tab) => {
           const active = filter === tab.key;
           return (
-            <button
+            <Button
               key={tab.key}
+              variant={active ? 'default' : 'ghost'}
+              size="sm"
               onClick={() => setFilter(tab.key)}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                active
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
+              className="transition-colors duration-150"
             >
               {t(tab.labelKey)}
-            </button>
+            </Button>
           );
         })}
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <Th isRTL={isRTL}>{t('compliance.col.regulation')}</Th>
-                <Th isRTL={isRTL}>{t('compliance.col.authority')}</Th>
-                <Th isRTL={isRTL}>{t('compliance.col.implementation')}</Th>
-                <Th isRTL={isRTL}>{t('compliance.col.status')}</Th>
-                <Th isRTL={isRTL}>{t('compliance.col.proof')}</Th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
+      {filtered.length === 0 ? (
+        <div className="bg-white rounded-lg border border-gray-200">
+          <EmptyState
+            icon={FileX}
+            title={t('compliance.empty.title')}
+            description={t('compliance.empty.desc')}
+            action={{ label: t('compliance.empty.action'), onClick: () => setFilter('all') }}
+          />
+        </div>
+      ) : isMobile ? (
+        <div className="space-y-3">
+          {filtered.map((r) => {
+            const cat = categoryStyles[r.cat];
+            const primaryName = t(`compliance.reg.${r.id}.name`);
+            const authority = t(`compliance.reg.${r.id}.authority`);
+            const implementation = t(`compliance.reg.${r.id}.implementation`);
+            const note = r.hasNote ? t(`compliance.reg.${r.id}.note`) : undefined;
+
+            return (
+              <div
+                key={r.id}
+                className={`bg-white rounded-lg border border-gray-200 p-4 space-y-3 ${isRTL ? 'text-right' : ''}`}
+              >
+                <div className={`flex items-start justify-between gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
+                  <p className="text-sm font-semibold text-gray-900">{primaryName}</p>
+                  <StatusBadge status={r.status} t={t} isRTL={isRTL} />
+                </div>
+                <div className={`flex flex-wrap items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
+                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${cat.pill}`}>
+                    {t(cat.labelKey)}
+                  </span>
+                  <span className="text-xs text-gray-500">{authority}</span>
+                </div>
+                <p className="text-sm text-gray-600">{implementation}</p>
+                <ProofButton
+                  proof={r.proof}
+                  label={r.proof.type === 'toggleLang' ? t('compliance.proof.toggleLang') : t('compliance.proof.view')}
+                  title={note}
+                  onToggleLang={handleToggleLang}
+                  isRTL={isRTL}
+                />
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className={isRTL ? 'text-right' : 'text-left'}>{t('compliance.col.regulation')}</TableHead>
+                <TableHead className={isRTL ? 'text-right' : 'text-left'}>{t('compliance.col.authority')}</TableHead>
+                <TableHead className={isRTL ? 'text-right' : 'text-left'}>{t('compliance.col.implementation')}</TableHead>
+                <TableHead className={isRTL ? 'text-right' : 'text-left'}>{t('compliance.col.status')}</TableHead>
+                <TableHead className={isRTL ? 'text-right' : 'text-left'}>{t('compliance.col.proof')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {filtered.map((r) => {
                 const cat = categoryStyles[r.cat];
                 const primaryName = t(`compliance.reg.${r.id}.name`);
@@ -133,45 +183,42 @@ export function CompliancePage() {
                 const note = r.hasNote ? t(`compliance.reg.${r.id}.note`) : undefined;
 
                 return (
-                  <tr key={r.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 align-top">
+                  <TableRow key={r.id}>
+                    <TableCell className="align-top whitespace-normal">
                       <div className={`flex flex-col gap-2 ${isRTL ? 'items-end' : 'items-start'}`}>
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${cat.pill}`}>
                           {t(cat.labelKey)}
                         </span>
                         <div className={isRTL ? 'text-right' : ''}>
-                          <p className="text-sm font-medium text-gray-900">{primaryName}</p>
+                          <p className="text-sm font-medium text-foreground">{primaryName}</p>
                         </div>
                       </div>
-                    </td>
-                    <td className={`px-6 py-4 align-top text-sm text-gray-700 ${isRTL ? 'text-right' : ''}`}>
+                    </TableCell>
+                    <TableCell className={`align-top text-sm text-foreground whitespace-normal ${isRTL ? 'text-right' : ''}`}>
                       {authority}
-                    </td>
-                    <td className={`px-6 py-4 align-top text-sm text-gray-600 max-w-md ${isRTL ? 'text-right' : ''}`}>
+                    </TableCell>
+                    <TableCell className={`align-top text-sm text-muted-foreground max-w-md whitespace-normal ${isRTL ? 'text-right' : ''}`}>
                       {implementation}
-                    </td>
-                    <td className="px-6 py-4 align-top">
-                      <StatusBadge status={r.status} t={t} />
-                    </td>
-                    <td className="px-6 py-4 align-top">
+                    </TableCell>
+                    <TableCell className="align-top">
+                      <StatusBadge status={r.status} t={t} isRTL={isRTL} />
+                    </TableCell>
+                    <TableCell className="align-top">
                       <ProofButton
                         proof={r.proof}
-                        label={
-                          r.proof.type === 'toggleLang'
-                            ? t('compliance.proof.toggleLang')
-                            : t('compliance.proof.view')
-                        }
+                        label={r.proof.type === 'toggleLang' ? t('compliance.proof.toggleLang') : t('compliance.proof.view')}
                         title={note}
                         onToggleLang={handleToggleLang}
+                        isRTL={isRTL}
                       />
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -181,14 +228,16 @@ function ProofButton({
   label,
   title,
   onToggleLang,
+  isRTL,
 }: {
   proof: ProofAction;
   label: string;
   title?: string;
   onToggleLang: () => void;
+  isRTL?: boolean;
 }) {
   const baseClass =
-    'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap';
+    `inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors duration-150 whitespace-nowrap focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${isRTL ? 'flex-row-reverse' : ''}`;
 
   if (proof.type === 'toggleLang') {
     return (
@@ -196,6 +245,7 @@ function ProofButton({
         type="button"
         onClick={onToggleLang}
         title={title}
+        aria-label={label}
         className={`${baseClass} bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200`}
       >
         <Languages className="w-3.5 h-3.5" />
@@ -208,6 +258,7 @@ function ProofButton({
     <Link
       to={proof.path}
       title={title}
+      aria-label={label}
       className={`${baseClass} bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200`}
     >
       <ExternalLink className="w-3.5 h-3.5" />
@@ -242,27 +293,21 @@ function StatCard({
   );
 }
 
-function StatusBadge({ status, t }: { status: Status; t: (k: string) => string }) {
+function StatusBadge({ status, t, isRTL }: { status: Status; t: (k: string) => string; isRTL?: boolean }) {
+  const dirClass = isRTL ? 'flex-row-reverse' : '';
   if (status === 'implemented') {
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 ${dirClass}`}>
         <CheckCircle2 className="w-3.5 h-3.5" />
         {t('compliance.status.implemented')}
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700 ${dirClass}`}>
       <Clock className="w-3.5 h-3.5" />
       {t('compliance.status.planned')}
     </span>
   );
 }
 
-function Th({ children, isRTL }: { children: React.ReactNode; isRTL?: boolean }) {
-  return (
-    <th className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider ${isRTL ? 'text-right' : 'text-left'}`}>
-      {children}
-    </th>
-  );
-}

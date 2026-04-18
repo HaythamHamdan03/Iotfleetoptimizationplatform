@@ -1,7 +1,12 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { DollarSign, Leaf, Gauge, Scale, Activity, Truck, Battery } from 'lucide-react';
 import { mockKPIData, mockVehicles } from '@/app/data/mockData';
 import { useLanguage } from '@/app/i18n/LanguageContext';
+import { Button } from '@/app/components/ui/button';
+import { EmptyState } from '@/app/components/ui/EmptyState';
+import { Skeleton } from '@/app/components/ui/skeleton';
 
 interface KPICardProps {
   title: string;
@@ -33,9 +38,21 @@ function KPICard({ title, value, unit, icon, trend, color, isRTL }: KPICardProps
 
 export function HomePage() {
   const { t, isRTL } = useLanguage();
+  const navigate = useNavigate();
   const activeVehicles = mockVehicles.filter(v => v.status === 'on-route').length;
   const idleVehicles = mockVehicles.filter(v => v.status === 'idle').length;
   const delayedVehicles = mockVehicles.filter(v => v.status === 'delayed').length;
+  const fleetIsEmpty = mockVehicles.length === 0;
+
+  const [isLoading, setIsLoading] = React.useState(true);
+  React.useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 350);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleGenerateReport = () => {
+    toast(t('home.reportComingSoon'));
+  };
 
   return (
     <div className={`p-8 ${isRTL ? 'text-right' : ''}`}>
@@ -56,19 +73,38 @@ export function HomePage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <KPICard title={t('home.totalCost')} value={mockKPIData.totalCost.toLocaleString()} unit="SAR"
-          icon={<DollarSign className="w-6 h-6 text-blue-700" />} trend={t('home.trendCost')} color="bg-blue-100" isRTL={isRTL} />
-        <KPICard title={t('home.co2Emissions')} value={mockKPIData.co2Emissions.toLocaleString()} unit="kg"
-          icon={<Leaf className="w-6 h-6 text-green-700" />} trend={t('home.trendCO2')} color="bg-green-100" isRTL={isRTL} />
-        <KPICard title={t('home.fleetUtilization')} value={mockKPIData.fleetUtilization} unit="%"
-          icon={<Gauge className="w-6 h-6 text-purple-700" />} trend={t('home.trendUtil')} color="bg-purple-100" isRTL={isRTL} />
-        <KPICard title={t('home.workloadFairness')} value={mockKPIData.workloadFairness.toFixed(2)}
-          icon={<Scale className="w-6 h-6 text-amber-700" />} trend={t('home.trendTarget')} color="bg-amber-100" isRTL={isRTL} />
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-lg border border-gray-200 p-6 space-y-3">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-9 w-32" />
+              <Skeleton className="h-3 w-28" />
+            </div>
+          ))
+        ) : (
+          <>
+            <KPICard title={t('home.totalCost')} value={mockKPIData.totalCost.toLocaleString()} unit="SAR"
+              icon={<DollarSign className="w-6 h-6 text-blue-700" />} trend={t('home.trendCost')} color="bg-blue-100" isRTL={isRTL} />
+            <KPICard title={t('home.co2Emissions')} value={mockKPIData.co2Emissions.toLocaleString()} unit="kg"
+              icon={<Leaf className="w-6 h-6 text-green-700" />} trend={t('home.trendCO2')} color="bg-green-100" isRTL={isRTL} />
+            <KPICard title={t('home.fleetUtilization')} value={mockKPIData.fleetUtilization} unit="%"
+              icon={<Gauge className="w-6 h-6 text-purple-700" />} trend={t('home.trendUtil')} color="bg-purple-100" isRTL={isRTL} />
+            <KPICard title={t('home.workloadFairness')} value={mockKPIData.workloadFairness.toFixed(2)}
+              icon={<Scale className="w-6 h-6 text-amber-700" />} trend={t('home.trendTarget')} color="bg-amber-100" isRTL={isRTL} />
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('home.fleetStatus')}</h2>
+          {fleetIsEmpty ? (
+            <EmptyState
+              icon={Truck}
+              title={t('home.empty.fleetTitle')}
+              description={t('home.empty.fleetDesc')}
+            />
+          ) : (
           <div className="space-y-4">
             {[
               { label: t('home.onRoute'), sub: t('home.activeDeliveries'), count: activeVehicles, bg: 'bg-green-100', color: 'text-green-700' },
@@ -89,6 +125,7 @@ export function HomePage() {
               </div>
             ))}
           </div>
+          )}
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -125,15 +162,30 @@ export function HomePage() {
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('home.quickActions')}</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <button className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+          <Button
+            variant="default"
+            size="lg"
+            onClick={() => navigate('/optimization')}
+            className="transition-colors duration-150"
+          >
             {t('home.runOptimization')}
-          </button>
-          <button className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium">
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={() => navigate('/fleet')}
+            className="transition-colors duration-150"
+          >
             {t('home.viewFleetMap')}
-          </button>
-          <button className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium">
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={handleGenerateReport}
+            className="transition-colors duration-150"
+          >
             {t('home.generateReport')}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -208,6 +208,9 @@ const en: Record<string, string> = {
   'home.runOptimization': 'Run Route Optimization',
   'home.viewFleetMap': 'View Live Fleet Map',
   'home.generateReport': 'Generate Report',
+  'home.reportComingSoon': 'Report generation coming soon',
+  'home.empty.fleetTitle': 'No vehicles in fleet',
+  'home.empty.fleetDesc': 'Add a vehicle from Settings to see fleet status here.',
 
   // LiveFleetMapPage
   'fleet.title': 'Live Fleet Map',
@@ -237,6 +240,17 @@ const en: Record<string, string> = {
   'fleet.legend.title': 'Route Legend',
   'fleet.legend.original': 'Original route',
   'fleet.legend.recalc': 'Recalculated route',
+  'fleet.vehicleLoading': 'EV-02 | loading…',
+  'fleet.clickVehicleHint': 'Click a vehicle to view details & pan map',
+  'fleet.disruptionLog': 'Disruption Log',
+  'fleet.disrupted': 'DISRUPTED',
+  'fleet.collapseSidebar': 'Collapse sidebar',
+  'fleet.expandSidebar': 'Expand sidebar',
+  'fleet.mapAriaLabel': 'Interactive fleet map',
+  'fleet.empty.title': 'No vehicles found',
+  'fleet.empty.desc': 'No vehicles match the current filters.',
+  'fleet.resolved': 'Resolved',
+  'fleet.active': 'Active',
 
   // RouteOptimizationPage
   'route.title': 'Route Optimization',
@@ -262,6 +276,8 @@ const en: Record<string, string> = {
   'route.totalEmissions': 'Total Emissions',
   'route.avgUtilization': 'Avg. Utilization',
   'route.fairnessIndex': 'Fairness Index',
+  'route.reportDelay': 'Report Delay',
+  'route.defaultLabel': 'Active Route',
 
   // AnalyticsPage
   'analytics.title': 'Analytics & Reporting',
@@ -287,6 +303,12 @@ const en: Record<string, string> = {
   'analytics.deliveries': 'Deliveries',
   'analytics.onTime': 'On-Time %',
   'analytics.efficiency': 'Efficiency',
+  'analytics.hoursWorked': 'Hours Worked',
+  'analytics.empty.title': 'No data available',
+  'analytics.empty.desc': 'Charts will appear here once data is collected.',
+  'analytics.chartCostAria': 'Line chart of cost vs CO₂ emissions over time',
+  'analytics.chartUtilizationAria': 'Area chart of hourly fleet utilization',
+  'analytics.chartDriverAria': 'Bar chart of driver performance',
 
   // SettingsPage
   'settings.title': 'Settings',
@@ -321,6 +343,11 @@ const en: Record<string, string> = {
   'settings.connected': 'Connected',
   'settings.dataRefresh': 'Data Refresh Rate',
   'settings.refreshRate': '30 seconds',
+  'settings.ltr': 'LTR',
+  'settings.rtl': 'RTL',
+  'settings.savedToast': 'Settings saved successfully',
+  'settings.saveErrorToast': 'Could not save settings',
+  'settings.resetToast': 'Settings reset to defaults',
 
   // Mobile Layout
   'mobile.appTitle': 'FleetIoT Driver',
@@ -355,6 +382,17 @@ const en: Record<string, string> = {
   'nav2.completed': 'Completed',
   'nav2.current': 'In Progress',
   'nav2.upcoming': 'Upcoming',
+  'nav2.deliveredToast': 'Stop marked as delivered',
+  'nav2.delayReportedToast': 'Delay reported to dispatch',
+  'nav2.delayDialogDesc': 'Tell dispatch why this stop is delayed.',
+  'nav2.delayReason': 'Reason',
+  'nav2.delayReason.traffic': 'Traffic congestion',
+  'nav2.delayReason.weather': 'Weather conditions',
+  'nav2.delayReason.vehicle': 'Vehicle issue',
+  'nav2.delayReason.customer': 'Customer not available',
+  'nav2.delayReason.other': 'Other',
+  'nav2.empty.title': 'No upcoming stops',
+  'nav2.empty.desc': 'You have completed every stop on this route.',
 
   // VehicleStatusPage
   'vehicle.title': 'Vehicle EV-02',
@@ -374,12 +412,34 @@ const en: Record<string, string> = {
   'vehicle.diagnostics': 'Vehicle Diagnostics',
   'vehicle.allSystems': 'All Systems Normal',
   'vehicle.allSystemsDesc': 'No warnings or errors detected',
+  'vehicle.cargoLoad': 'Cargo Load',
+  'vehicle.currentLoad': 'Current Load',
+  'vehicle.capacityUsed': 'capacity utilized',
+  'vehicle.reportIssue': 'Report Vehicle Issue',
+  'vehicle.signalStrong': 'Strong',
+  'vehicle.signalWeak': 'Weak',
+  'vehicle.excellent': 'Excellent',
+  'vehicle.issue.desc': 'Describe what is wrong with the vehicle. Maintenance will be alerted.',
+  'vehicle.issue.label': 'Issue description',
+  'vehicle.issue.placeholder': 'e.g. Battery dropping unusually fast under load…',
+  'vehicle.issue.required': 'Please describe the issue',
+  'vehicle.issue.submitted': 'Issue reported to maintenance',
 
   // NotificationsPage
   'notif.title': 'Notifications',
   'notif.unread': 'unread notification',
   'notif.unreadPlural': 'unread notifications',
   'notif.markAllRead': 'Mark All Read',
+  'notifications.weeklyPerformance': 'Weekly Performance Summary',
+  'notifications.weeklyPerformanceBody': 'Your performance stats for the week are ready. 42 deliveries, 94% on-time.',
+  'notifications.maintenanceReminder': 'Vehicle Maintenance Reminder',
+  'notifications.maintenanceReminderBody': 'EV-02 is due for routine maintenance in 2,400 km.',
+  'notifications.systemUpdate': 'System Update Available',
+  'notifications.systemUpdateBody': 'A new version of the driver app is available.',
+  'notifications.markAllRead': 'Mark All Read',
+  'notifications.allMarkedRead': 'All notifications marked as read',
+  'notifications.empty.title': 'You are all caught up',
+  'notifications.empty.desc': 'No new notifications right now.',
 
   // ProfilePage
   'profile.since': 'Member since Jan 2025',
@@ -392,6 +452,25 @@ const en: Record<string, string> = {
   'profile.logout': 'Logout',
   'profile.language': 'Language',
   'profile.selectLanguage': 'Select Language',
+  'profile.statusActive': 'Active',
+  'profile.statusOffline': 'Offline',
+  'profile.badge.topPerformer': 'Top Performer',
+  'profile.badge.workloadBalance': 'Workload Balance',
+  'profile.achievements': 'Achievements',
+  'profile.achievement.deliveries': '100 Deliveries',
+  'profile.achievement.zeroDelays': 'Zero Delays',
+  'profile.achievement.efficiencyKing': 'Efficiency King',
+  'profile.achievement.fiveYears': '5-Year Veteran',
+  'profile.achievement.fuelSaver': 'Fuel Saver',
+  'profile.editProfile': 'Edit Profile',
+  'profile.editProfileDesc': 'Update your display name and shift status.',
+  'profile.viewAllAchievements': 'View All Achievements',
+  'profile.collapseAchievements': 'Show fewer achievements',
+  'profile.nameLabel': 'Display name',
+  'profile.statusLabel': 'Shift status',
+  'profile.savedToast': 'Profile updated',
+  'profile.loggedOutToast': 'You have been logged out',
+  'profile.settingsComingSoon': 'Mobile settings coming soon',
 
   // IoT
   'iot.connected': 'IoT Device Connected',
@@ -411,6 +490,24 @@ const en: Record<string, string> = {
   'iot.deviceConfig': 'Device IP',
   'iot.liveIndicator': 'LIVE',
   'iot.recalcLast': 'Last Recalc',
+  'iot.lastKnownShort': 'Last known',
+
+  // Common
+  'common.cancel': 'Cancel',
+  'common.submit': 'Submit',
+  'common.save': 'Save',
+  'common.close': 'Close',
+
+  // Optimization extras
+  'optimization.fleetSize': 'Fleet Size:',
+  'optimization.activeRoutes': 'Active Routes:',
+  'optimization.algorithm': 'Algorithm:',
+  'optimization.geneticAlgorithm': 'Genetic Algorithm',
+
+  // Compliance extras
+  'compliance.empty.title': 'No regulations found',
+  'compliance.empty.desc': 'Try clearing the active filter to see all regulations.',
+  'compliance.empty.action': 'Clear filters',
 };
 
 const ar: Record<string, string> = {
@@ -572,6 +669,9 @@ const ar: Record<string, string> = {
   'home.runOptimization': 'تشغيل تحسين المسار',
   'home.viewFleetMap': 'عرض خريطة الأسطول المباشرة',
   'home.generateReport': 'إنشاء تقرير',
+  'home.reportComingSoon': 'إنشاء التقارير قادم قريباً',
+  'home.empty.fleetTitle': 'لا توجد مركبات في الأسطول',
+  'home.empty.fleetDesc': 'أضف مركبة من الإعدادات لعرض حالة الأسطول هنا.',
 
   // LiveFleetMapPage
   'fleet.title': 'خريطة الأسطول المباشرة',
@@ -601,6 +701,17 @@ const ar: Record<string, string> = {
   'fleet.legend.title': 'مفتاح المسار',
   'fleet.legend.original': 'المسار الأصلي',
   'fleet.legend.recalc': 'المسار المعاد حسابه',
+  'fleet.vehicleLoading': 'EV-02 | جارٍ التحميل…',
+  'fleet.clickVehicleHint': 'اضغط على مركبة لعرض التفاصيل وتحريك الخريطة',
+  'fleet.disruptionLog': 'سجل الاضطرابات',
+  'fleet.disrupted': 'مضطرب',
+  'fleet.collapseSidebar': 'طيّ الشريط الجانبي',
+  'fleet.expandSidebar': 'توسيع الشريط الجانبي',
+  'fleet.mapAriaLabel': 'خريطة الأسطول التفاعلية',
+  'fleet.empty.title': 'لا توجد مركبات',
+  'fleet.empty.desc': 'لا توجد مركبات تطابق عوامل التصفية الحالية.',
+  'fleet.resolved': 'تمت المعالجة',
+  'fleet.active': 'نشط',
 
   // RouteOptimizationPage
   'route.title': 'تحسين المسار',
@@ -626,6 +737,8 @@ const ar: Record<string, string> = {
   'route.totalEmissions': 'إجمالي الانبعاثات',
   'route.avgUtilization': 'متوسط الاستخدام',
   'route.fairnessIndex': 'مؤشر العدالة',
+  'route.reportDelay': 'الإبلاغ عن تأخير',
+  'route.defaultLabel': 'المسار النشط',
 
   // AnalyticsPage
   'analytics.title': 'التحليلات والتقارير',
@@ -651,6 +764,12 @@ const ar: Record<string, string> = {
   'analytics.deliveries': 'التوصيلات',
   'analytics.onTime': 'نسبة الالتزام بالوقت',
   'analytics.efficiency': 'الكفاءة',
+  'analytics.hoursWorked': 'ساعات العمل',
+  'analytics.empty.title': 'لا توجد بيانات',
+  'analytics.empty.desc': 'ستظهر الرسوم البيانية هنا عند توفر البيانات.',
+  'analytics.chartCostAria': 'رسم بياني خطي للتكلفة مقابل انبعاثات CO₂ بمرور الوقت',
+  'analytics.chartUtilizationAria': 'رسم بياني للاستخدام بالساعة',
+  'analytics.chartDriverAria': 'رسم بياني عمودي لأداء السائقين',
 
   // SettingsPage
   'settings.title': 'الإعدادات',
@@ -685,6 +804,11 @@ const ar: Record<string, string> = {
   'settings.connected': 'متصل',
   'settings.dataRefresh': 'معدل تحديث البيانات',
   'settings.refreshRate': '30 ثانية',
+  'settings.ltr': 'من اليسار لليمين',
+  'settings.rtl': 'من اليمين لليسار',
+  'settings.savedToast': 'تم حفظ الإعدادات بنجاح',
+  'settings.saveErrorToast': 'تعذّر حفظ الإعدادات',
+  'settings.resetToast': 'تمت إعادة الإعدادات إلى الافتراضيات',
 
   // Mobile Layout
   'mobile.appTitle': 'FleetIoT سائق',
@@ -719,6 +843,17 @@ const ar: Record<string, string> = {
   'nav2.completed': 'مكتمل',
   'nav2.current': 'جارٍ',
   'nav2.upcoming': 'قادم',
+  'nav2.deliveredToast': 'تم تعيين المحطة كمُسلَّمة',
+  'nav2.delayReportedToast': 'تم إبلاغ الإرسال بالتأخير',
+  'nav2.delayDialogDesc': 'أبلغ الإرسال عن سبب تأخر هذه المحطة.',
+  'nav2.delayReason': 'السبب',
+  'nav2.delayReason.traffic': 'ازدحام مروري',
+  'nav2.delayReason.weather': 'أحوال جوية',
+  'nav2.delayReason.vehicle': 'مشكلة في المركبة',
+  'nav2.delayReason.customer': 'العميل غير متاح',
+  'nav2.delayReason.other': 'أخرى',
+  'nav2.empty.title': 'لا توجد محطات قادمة',
+  'nav2.empty.desc': 'لقد أكملت كل محطات هذا المسار.',
 
   // VehicleStatusPage
   'vehicle.title': 'المركبة EV-02',
@@ -738,12 +873,34 @@ const ar: Record<string, string> = {
   'vehicle.diagnostics': 'تشخيص المركبة',
   'vehicle.allSystems': 'جميع الأنظمة طبيعية',
   'vehicle.allSystemsDesc': 'لا توجد تحذيرات أو أخطاء',
+  'vehicle.cargoLoad': 'حمولة الشحن',
+  'vehicle.currentLoad': 'الحمولة الحالية',
+  'vehicle.capacityUsed': 'من السعة مستخدمة',
+  'vehicle.reportIssue': 'الإبلاغ عن مشكلة في المركبة',
+  'vehicle.signalStrong': 'قوية',
+  'vehicle.signalWeak': 'ضعيفة',
+  'vehicle.excellent': 'ممتاز',
+  'vehicle.issue.desc': 'صف المشكلة في المركبة وسيتم إبلاغ الصيانة.',
+  'vehicle.issue.label': 'وصف المشكلة',
+  'vehicle.issue.placeholder': 'مثال: البطارية تنخفض بسرعة غير معتادة تحت الحمل…',
+  'vehicle.issue.required': 'يرجى وصف المشكلة',
+  'vehicle.issue.submitted': 'تم إبلاغ الصيانة بالمشكلة',
 
   // NotificationsPage
   'notif.title': 'الإشعارات',
   'notif.unread': 'إشعار غير مقروء',
   'notif.unreadPlural': 'إشعارات غير مقروءة',
   'notif.markAllRead': 'تعيين الكل كمقروء',
+  'notifications.weeklyPerformance': 'ملخص الأداء الأسبوعي',
+  'notifications.weeklyPerformanceBody': 'إحصاءات أداء الأسبوع جاهزة. 42 توصيلة، 94% في الوقت.',
+  'notifications.maintenanceReminder': 'تذكير بصيانة المركبة',
+  'notifications.maintenanceReminderBody': 'EV-02 يحتاج إلى صيانة دورية بعد 2400 كم.',
+  'notifications.systemUpdate': 'تحديث للنظام متاح',
+  'notifications.systemUpdateBody': 'إصدار جديد من تطبيق السائق متاح.',
+  'notifications.markAllRead': 'تعيين الكل كمقروء',
+  'notifications.allMarkedRead': 'تم تعيين كل الإشعارات كمقروءة',
+  'notifications.empty.title': 'لا توجد إشعارات جديدة',
+  'notifications.empty.desc': 'لا إشعارات جديدة في الوقت الحالي.',
 
   // ProfilePage
   'profile.since': 'عضو منذ يناير 2025',
@@ -756,6 +913,25 @@ const ar: Record<string, string> = {
   'profile.logout': 'تسجيل الخروج',
   'profile.language': 'اللغة',
   'profile.selectLanguage': 'اختر اللغة',
+  'profile.statusActive': 'نشط',
+  'profile.statusOffline': 'غير متصل',
+  'profile.badge.topPerformer': 'الأفضل أداءً',
+  'profile.badge.workloadBalance': 'توازن العمل',
+  'profile.achievements': 'الإنجازات',
+  'profile.achievement.deliveries': '100 توصيلة',
+  'profile.achievement.zeroDelays': 'بدون تأخير',
+  'profile.achievement.efficiencyKing': 'ملك الكفاءة',
+  'profile.achievement.fiveYears': '5 سنوات خبرة',
+  'profile.achievement.fuelSaver': 'موفّر الوقود',
+  'profile.editProfile': 'تعديل الملف',
+  'profile.editProfileDesc': 'حدّث اسمك المعروض وحالة الوردية.',
+  'profile.viewAllAchievements': 'عرض كل الإنجازات',
+  'profile.collapseAchievements': 'إخفاء الإنجازات الإضافية',
+  'profile.nameLabel': 'اسم العرض',
+  'profile.statusLabel': 'حالة الوردية',
+  'profile.savedToast': 'تم تحديث الملف',
+  'profile.loggedOutToast': 'تم تسجيل الخروج',
+  'profile.settingsComingSoon': 'إعدادات الجوال قادمة قريباً',
 
   // IoT
   'iot.connected': 'جهاز IoT متصل',
@@ -775,12 +951,238 @@ const ar: Record<string, string> = {
   'iot.deviceConfig': 'عنوان الجهاز',
   'iot.liveIndicator': 'مباشر',
   'iot.recalcLast': 'آخر إعادة حساب',
+  'iot.lastKnownShort': 'آخر بيانات',
+
+  // Common
+  'common.cancel': 'إلغاء',
+  'common.submit': 'إرسال',
+  'common.save': 'حفظ',
+  'common.close': 'إغلاق',
+
+  // Optimization extras
+  'optimization.fleetSize': 'حجم الأسطول:',
+  'optimization.activeRoutes': 'المسارات النشطة:',
+  'optimization.algorithm': 'الخوارزمية:',
+  'optimization.geneticAlgorithm': 'الخوارزمية الجينية',
+
+  // Compliance extras
+  'compliance.empty.title': 'لا توجد لوائح',
+  'compliance.empty.desc': 'جرّب إزالة عوامل التصفية لعرض جميع اللوائح.',
+  'compliance.empty.action': 'مسح عوامل التصفية',
 };
 
 const ur: Record<string, string> = {
   // App top bar
   'app.webDashboard': 'ویب ڈیش بورڈ',
   'app.mobileApp': 'موبائل ایپ',
+
+  // Dashboard Sidebar
+  'nav.overview': 'جائزہ',
+  'nav.liveFleet': 'لائیو فلیٹ',
+  'nav.optimization': 'اصلاح',
+  'nav.analytics': 'تجزیات',
+  'nav.compliance': 'تعمیل',
+  'nav.settings': 'ترتیبات',
+  'nav.portal': 'ڈسپیچر پورٹل v2.1',
+  'nav.project': 'سینئر ڈیزائن پروجیکٹ 2026',
+
+  // CompliancePage
+  'compliance.title': 'ضابطہ جاتی تعمیل', // TODO: verify Urdu
+  'compliance.subtitle': 'سعودی عرب کے ریگولیٹری فریم ورک کا الائنمنٹ میٹرکس', // TODO: verify Urdu
+  'compliance.stat.total': 'کل ضوابط', // TODO: verify Urdu
+  'compliance.stat.implemented': 'نافذ', // TODO: verify Urdu
+  'compliance.stat.planned': 'منصوبہ بند', // TODO: verify Urdu
+  'compliance.filter.all': 'سب', // TODO: verify Urdu
+  'compliance.filter.traffic': 'ٹریفک اور گاڑیاں', // TODO: verify Urdu
+  'compliance.filter.delivery': 'ڈیلیوری پلیٹ فارم', // TODO: verify Urdu
+  'compliance.filter.arabic': 'عربی لوکلائزیشن', // TODO: verify Urdu
+  'compliance.filter.data': 'ڈیٹا کا تحفظ', // TODO: verify Urdu
+  'compliance.col.regulation': 'ضابطہ', // TODO: verify Urdu
+  'compliance.col.authority': 'ادارہ', // TODO: verify Urdu
+  'compliance.col.implementation': 'سسٹم میں نفاذ', // TODO: verify Urdu
+  'compliance.col.status': 'حیثیت', // TODO: verify Urdu
+  'compliance.col.proof': 'ثبوت', // TODO: verify Urdu
+  'compliance.status.implemented': 'نافذ', // TODO: verify Urdu
+  'compliance.status.planned': 'منصوبہ بند', // TODO: verify Urdu
+  'compliance.proof.view': 'ثبوت دیکھیں', // TODO: verify Urdu
+  'compliance.proof.toggleLang': 'زبان تبدیل کریں', // TODO: verify Urdu
+  'compliance.cat.traffic': 'ٹریفک', // TODO: verify Urdu
+  'compliance.cat.delivery': 'ڈیلیوری', // TODO: verify Urdu
+  'compliance.cat.arabic': 'عربی', // TODO: verify Urdu
+  'compliance.cat.data': 'ڈیٹا', // TODO: verify Urdu
+  'compliance.empty.title': 'کوئی ضوابط نہیں ملے', // TODO: verify Urdu
+  'compliance.empty.desc': 'تمام ضوابط دیکھنے کے لیے فلٹرز ہٹا دیں۔', // TODO: verify Urdu
+  'compliance.empty.action': 'فلٹرز صاف کریں', // TODO: verify Urdu
+
+  // HomePage
+  'home.title': 'فلیٹ آپریشنز ڈیش بورڈ',
+  'home.subtitle': 'ہائبرڈ فلیٹ آپریشنز کی ریئل ٹائم نگرانی',
+  'home.liveConnected': 'لائیو ڈیٹا منسلک', // TODO: verify Urdu
+  'home.lastUpdated': 'آخری تازہ کاری', // TODO: verify Urdu
+  'home.totalCost': 'کل ڈیلیوری لاگت', // TODO: verify Urdu
+  'home.co2Emissions': 'CO₂ اخراج', // TODO: verify Urdu
+  'home.fleetUtilization': 'فلیٹ کا استعمال', // TODO: verify Urdu
+  'home.workloadFairness': 'کام کا توازن انڈیکس', // TODO: verify Urdu
+  'home.trendCost': '↓ پچھلے مہینے سے 3.2%', // TODO: verify Urdu
+  'home.trendCO2': '↓ پچھلے مہینے سے 8.5%', // TODO: verify Urdu
+  'home.trendUtil': '↑ پچھلے مہینے سے 5.1%', // TODO: verify Urdu
+  'home.trendTarget': 'ہدف: > 0.80', // TODO: verify Urdu
+  'home.fleetStatus': 'فلیٹ کی حیثیت', // TODO: verify Urdu
+  'home.onRoute': 'راستے پر', // TODO: verify Urdu
+  'home.activeDeliveries': 'فعال ڈیلیوریاں', // TODO: verify Urdu
+  'home.idle': 'فارغ', // TODO: verify Urdu
+  'home.availableDispatch': 'بھیجنے کے لیے دستیاب', // TODO: verify Urdu
+  'home.delayed': 'تاخیر سے', // TODO: verify Urdu
+  'home.requiresAttention': 'توجہ درکار', // TODO: verify Urdu
+  'home.vehicleTypes': 'گاڑیوں کی اقسام کی تقسیم', // TODO: verify Urdu
+  'home.iceТrucks': 'ICE ٹرک', // TODO: verify Urdu
+  'home.conventionalFleet': 'روایتی فلیٹ', // TODO: verify Urdu
+  'home.electricVehicles': 'برقی گاڑیاں', // TODO: verify Urdu
+  'home.zeroEmission': 'صفر اخراج', // TODO: verify Urdu
+  'home.quickActions': 'فوری اقدامات', // TODO: verify Urdu
+  'home.runOptimization': 'روٹ آپٹیمائزیشن چلائیں', // TODO: verify Urdu
+  'home.viewFleetMap': 'لائیو فلیٹ نقشہ دیکھیں', // TODO: verify Urdu
+  'home.generateReport': 'رپورٹ بنائیں', // TODO: verify Urdu
+  'home.reportComingSoon': 'رپورٹ بنانا جلد آرہا ہے', // TODO: verify Urdu
+  'home.empty.fleetTitle': 'فلیٹ میں کوئی گاڑی نہیں', // TODO: verify Urdu
+  'home.empty.fleetDesc': 'فلیٹ کی حیثیت دیکھنے کے لیے ترتیبات سے گاڑی شامل کریں۔', // TODO: verify Urdu
+
+  // LiveFleetMapPage
+  'fleet.title': 'لائیو فلیٹ نقشہ',
+  'fleet.subtitle': 'ریئل ٹائم گاڑی ٹریکنگ اور حیثیت کی نگرانی', // TODO: verify Urdu
+  'fleet.location': 'ریاض، سعودی عرب', // TODO: verify Urdu
+  'fleet.liveTracking': 'لائیو فلیٹ ٹریکنگ', // TODO: verify Urdu
+  'fleet.legend': 'لیجنڈ', // TODO: verify Urdu
+  'fleet.onRoute': 'راستے پر', // TODO: verify Urdu
+  'fleet.delayed': 'تاخیر سے', // TODO: verify Urdu
+  'fleet.idle': 'فارغ', // TODO: verify Urdu
+  'fleet.vehicleDetails': 'گاڑی کی تفصیلات', // TODO: verify Urdu
+  'fleet.selectVehicle': 'تفصیلات دیکھنے کے لیے نقشے پر گاڑی منتخب کریں', // TODO: verify Urdu
+  'fleet.driver': 'ڈرائیور', // TODO: verify Urdu
+  'fleet.currentLocation': 'موجودہ مقام', // TODO: verify Urdu
+  'fleet.speed': 'رفتار', // TODO: verify Urdu
+  'fleet.nextStop': 'اگلا پڑاؤ', // TODO: verify Urdu
+  'fleet.eta': 'متوقع آمد', // TODO: verify Urdu
+  'fleet.remainingStops': 'باقی پڑاؤ', // TODO: verify Urdu
+  'fleet.routeProgress': 'راستے کی پیش رفت', // TODO: verify Urdu
+  'fleet.contactDriver': 'ڈرائیور سے رابطہ', // TODO: verify Urdu
+  'fleet.battery': 'بیٹری', // TODO: verify Urdu
+  'fleet.fuel': 'ایندھن', // TODO: verify Urdu
+  'fleet.destination': 'منزل', // TODO: verify Urdu
+  'fleet.finalStop': 'آخری پڑاؤ', // TODO: verify Urdu
+  'fleet.recalculate': 'راستہ دوبارہ حساب کریں', // TODO: verify Urdu
+  'fleet.routing': 'راستہ بنایا جا رہا ہے…', // TODO: verify Urdu
+  'fleet.legend.title': 'راستہ لیجنڈ', // TODO: verify Urdu
+  'fleet.legend.original': 'اصلی راستہ', // TODO: verify Urdu
+  'fleet.legend.recalc': 'دوبارہ حساب شدہ راستہ', // TODO: verify Urdu
+  'fleet.vehicleLoading': 'EV-02 | لوڈ ہو رہا ہے…', // TODO: verify Urdu
+  'fleet.clickVehicleHint': 'تفصیلات دیکھنے اور نقشہ منتقل کرنے کے لیے گاڑی پر کلک کریں', // TODO: verify Urdu
+  'fleet.disruptionLog': 'خلل لاگ', // TODO: verify Urdu
+  'fleet.disrupted': 'خلل', // TODO: verify Urdu
+  'fleet.collapseSidebar': 'سائڈبار سکیڑیں', // TODO: verify Urdu
+  'fleet.expandSidebar': 'سائڈبار کھولیں', // TODO: verify Urdu
+  'fleet.mapAriaLabel': 'انٹرایکٹو فلیٹ نقشہ', // TODO: verify Urdu
+  'fleet.empty.title': 'کوئی گاڑی نہیں ملی', // TODO: verify Urdu
+  'fleet.empty.desc': 'موجودہ فلٹرز سے کوئی گاڑی میل نہیں کھاتی۔', // TODO: verify Urdu
+  'fleet.resolved': 'حل ہو گیا', // TODO: verify Urdu
+  'fleet.active': 'فعال', // TODO: verify Urdu
+
+  // RouteOptimizationPage
+  'route.title': 'راستے کی اصلاح',
+  'route.subtitle': 'ہائبرڈ فلیٹ کے لیے AI سے چلنے والی روٹ پلاننگ', // TODO: verify Urdu
+  'route.configuration': 'اصلاح کی ترتیب', // TODO: verify Urdu
+  'route.costMin': 'لاگت کم سے کم', // TODO: verify Urdu
+  'route.costMinDesc': 'SAR لاگت کی کارکردگی کو ترجیح', // TODO: verify Urdu
+  'route.co2Min': 'CO₂ کم سے کم', // TODO: verify Urdu
+  'route.co2MinDesc': 'کاربن فٹ پرنٹ کم کریں', // TODO: verify Urdu
+  'route.balanced': 'متوازن', // TODO: verify Urdu
+  'route.balancedDesc': 'تمام مقاصد کو برابر بہتر بنائیں', // TODO: verify Urdu
+  'route.runOptimization': 'اصلاح چلائیں', // TODO: verify Urdu
+  'route.optimizing': 'اصلاح ہو رہی ہے...', // TODO: verify Urdu
+  'route.fleetSummary': 'فلیٹ کا خلاصہ', // TODO: verify Urdu
+  'route.vehicles': 'گاڑیاں', // TODO: verify Urdu
+  'route.routes': 'راستے', // TODO: verify Urdu
+  'route.stops': 'پڑاؤ', // TODO: verify Urdu
+  'route.solveTime': 'حل کا وقت', // TODO: verify Urdu
+  'route.results': 'اصلاح کے نتائج', // TODO: verify Urdu
+  'route.waitingTitle': 'اصلاح کے لیے تیار', // TODO: verify Urdu
+  'route.waitingDesc': 'مقصد منتخب کریں اور بہترین راستے بنانے کے لیے اصلاح چلائیں پر کلک کریں', // TODO: verify Urdu
+  'route.totalCost': 'کل لاگت', // TODO: verify Urdu
+  'route.totalEmissions': 'کل اخراج', // TODO: verify Urdu
+  'route.avgUtilization': 'اوسط استعمال', // TODO: verify Urdu
+  'route.fairnessIndex': 'انصاف انڈیکس', // TODO: verify Urdu
+  'route.reportDelay': 'تاخیر کی اطلاع', // TODO: verify Urdu
+  'route.defaultLabel': 'فعال راستہ', // TODO: verify Urdu
+
+  // AnalyticsPage
+  'analytics.title': 'تجزیات اور رپورٹنگ',
+  'analytics.subtitle': 'فلیٹ کی کارکردگی کی بصیرت اور پائیداری کی پیمائش', // TODO: verify Urdu
+  'analytics.export': 'رپورٹ ایکسپورٹ', // TODO: verify Urdu
+  'analytics.costVsCO2': 'وقت کے ساتھ لاگت بمقابلہ CO₂ اخراج', // TODO: verify Urdu
+  'analytics.dailyTrends': 'روزانہ لاگت اور اخراج کے رجحانات', // TODO: verify Urdu
+  'analytics.cost': 'لاگت (SAR)', // TODO: verify Urdu
+  'analytics.co2': 'CO₂ (کلوگرام)', // TODO: verify Urdu
+  'analytics.insight': 'بصیرت: برقی گاڑیوں نے CO₂ اخراج میں 23% کمی میں حصہ لیا', // TODO: verify Urdu
+  'analytics.utilizationTitle': 'گھنٹہ وار فلیٹ استعمال', // TODO: verify Urdu
+  'analytics.utilizationDesc': 'دن بھر گاڑیوں کے استعمال کا انداز', // TODO: verify Urdu
+  'analytics.peakHours': 'چوٹی کے گھنٹے', // TODO: verify Urdu
+  'analytics.avgUtilization': 'اوسط استعمال', // TODO: verify Urdu
+  'analytics.offPeak': 'غیر چوٹی گھنٹے', // TODO: verify Urdu
+  'analytics.vehiclePerf': 'گاڑیوں کی کارکردگی کی تفصیل', // TODO: verify Urdu
+  'analytics.vehiclePerfDesc': 'انفرادی گاڑیوں کی کارکردگی کی پیمائش', // TODO: verify Urdu
+  'analytics.alertTitle': 'بلند ایندھن لاگت الرٹ', // TODO: verify Urdu
+  'analytics.alertDesc': 'ICE ٹرک متوقع سے 34% زیادہ ایندھن خرچ کر رہے ہیں۔ راستے دوبارہ متوازن کریں۔', // TODO: verify Urdu
+  'analytics.driverPerf': 'ڈرائیور کی کارکردگی کا موازنہ', // TODO: verify Urdu
+  'analytics.driverPerfDesc': 'موازنہ کارکردگی اور ڈیلیوری کی پیمائش', // TODO: verify Urdu
+  'analytics.driverName': 'ڈرائیور', // TODO: verify Urdu
+  'analytics.deliveries': 'ڈیلیوریاں', // TODO: verify Urdu
+  'analytics.onTime': 'بروقت %', // TODO: verify Urdu
+  'analytics.efficiency': 'کارکردگی', // TODO: verify Urdu
+  'analytics.hoursWorked': 'کام کے گھنٹے', // TODO: verify Urdu
+  'analytics.empty.title': 'کوئی ڈیٹا دستیاب نہیں', // TODO: verify Urdu
+  'analytics.empty.desc': 'ڈیٹا جمع ہونے پر چارٹ یہاں ظاہر ہوں گے۔', // TODO: verify Urdu
+  'analytics.chartCostAria': 'وقت کے ساتھ لاگت بمقابلہ CO₂ کا لائن چارٹ', // TODO: verify Urdu
+  'analytics.chartUtilizationAria': 'گھنٹہ وار فلیٹ استعمال کا چارٹ', // TODO: verify Urdu
+  'analytics.chartDriverAria': 'ڈرائیور کی کارکردگی کا بار چارٹ', // TODO: verify Urdu
+
+  // SettingsPage
+  'settings.title': 'ترتیبات',
+  'settings.subtitle': 'فلیٹ پیرامیٹرز اور سسٹم کی ترجیحات ترتیب دیں', // TODO: verify Urdu
+  'settings.fleetConfig': 'فلیٹ کی ترتیب', // TODO: verify Urdu
+  'settings.fleetConfigDesc': 'گاڑیوں کی اقسام اور صلاحیت کا انتظام', // TODO: verify Urdu
+  'settings.iceTrucksCount': 'ICE ٹرکوں کی تعداد', // TODO: verify Urdu
+  'settings.iceTruckCapacity': 'ICE ٹرک کی صلاحیت (کلوگرام)', // TODO: verify Urdu
+  'settings.evCount': 'برقی گاڑیوں کی تعداد', // TODO: verify Urdu
+  'settings.evCapacity': 'EV کی صلاحیت (کلوگرام)', // TODO: verify Urdu
+  'settings.startTime': 'آپریٹنگ شروع کا وقت', // TODO: verify Urdu
+  'settings.endTime': 'آپریٹنگ ختم کا وقت', // TODO: verify Urdu
+  'settings.optimization': 'اصلاح کے وزن', // TODO: verify Urdu
+  'settings.optimizationDesc': 'الگورتھم کی ترجیحات ایڈجسٹ کریں', // TODO: verify Urdu
+  'settings.costWeight': 'لاگت کا وزن', // TODO: verify Urdu
+  'settings.co2Weight': 'CO₂ کا وزن', // TODO: verify Urdu
+  'settings.workloadWeight': 'کام کے توازن کا وزن', // TODO: verify Urdu
+  'settings.weightsOk': 'وزن متوازن ہیں (100%)', // TODO: verify Urdu
+  'settings.weightsWarning': '⚠ تنبیہ: وزن کا مجموعہ 100% ہونا چاہیے (موجودہ:', // TODO: verify Urdu
+  'settings.language': 'زبان اور علاقائی ترتیبات', // TODO: verify Urdu
+  'settings.languageDesc': 'انٹرفیس زبان اور لوکلائزیشن', // TODO: verify Urdu
+  'settings.interfaceLang': 'انٹرفیس زبان', // TODO: verify Urdu
+  'settings.english': 'English',
+  'settings.arabic': 'العربية',
+  'settings.currency': 'کرنسی', // TODO: verify Urdu
+  'settings.save': 'ترتیبات محفوظ کریں', // TODO: verify Urdu
+  'settings.reset': 'ڈیفالٹ پر ری سیٹ کریں', // TODO: verify Urdu
+  'settings.system': 'سسٹم کی معلومات', // TODO: verify Urdu
+  'settings.systemDesc': 'پلیٹ فارم اور کنیکٹیویٹی کی حیثیت', // TODO: verify Urdu
+  'settings.version': 'پلیٹ فارم ورژن', // TODO: verify Urdu
+  'settings.apiStatus': 'API کی حیثیت', // TODO: verify Urdu
+  'settings.connected': 'منسلک', // TODO: verify Urdu
+  'settings.dataRefresh': 'ڈیٹا ریفریش ریٹ', // TODO: verify Urdu
+  'settings.refreshRate': '30 سیکنڈ', // TODO: verify Urdu
+  'settings.ltr': 'LTR', // TODO: verify Urdu
+  'settings.rtl': 'RTL', // TODO: verify Urdu
+  'settings.savedToast': 'ترتیبات کامیابی سے محفوظ ہو گئیں', // TODO: verify Urdu
+  'settings.saveErrorToast': 'ترتیبات محفوظ نہیں ہو سکیں', // TODO: verify Urdu
+  'settings.resetToast': 'ترتیبات ڈیفالٹ پر ری سیٹ ہو گئیں', // TODO: verify Urdu
 
   // Mobile Layout
   'mobile.appTitle': 'FleetIoT ڈرائیور',
@@ -815,6 +1217,17 @@ const ur: Record<string, string> = {
   'nav2.completed': 'مکمل',
   'nav2.current': 'جاری',
   'nav2.upcoming': 'آنے والا',
+  'nav2.deliveredToast': 'پڑاؤ ڈیلیور شدہ نشان لگا دیا گیا', // TODO: verify Urdu
+  'nav2.delayReportedToast': 'تاخیر ڈسپیچ کو رپورٹ کر دی گئی', // TODO: verify Urdu
+  'nav2.delayDialogDesc': 'ڈسپیچ کو بتائیں کہ یہ پڑاؤ کیوں تاخیر سے ہے۔', // TODO: verify Urdu
+  'nav2.delayReason': 'وجہ', // TODO: verify Urdu
+  'nav2.delayReason.traffic': 'ٹریفک کی بھیڑ', // TODO: verify Urdu
+  'nav2.delayReason.weather': 'موسمی حالات', // TODO: verify Urdu
+  'nav2.delayReason.vehicle': 'گاڑی کا مسئلہ', // TODO: verify Urdu
+  'nav2.delayReason.customer': 'گاہک دستیاب نہیں', // TODO: verify Urdu
+  'nav2.delayReason.other': 'دیگر', // TODO: verify Urdu
+  'nav2.empty.title': 'کوئی آنے والا پڑاؤ نہیں', // TODO: verify Urdu
+  'nav2.empty.desc': 'آپ نے اس راستے کے سب پڑاؤ مکمل کر لیے ہیں۔', // TODO: verify Urdu
 
   // VehicleStatusPage
   'vehicle.title': 'گاڑی EV-02',
@@ -834,12 +1247,34 @@ const ur: Record<string, string> = {
   'vehicle.diagnostics': 'گاڑی کی تشخیص',
   'vehicle.allSystems': 'تمام سسٹم نارمل',
   'vehicle.allSystemsDesc': 'کوئی انتباہ یا خرابی نہیں',
+  'vehicle.cargoLoad': 'سامان کا بوجھ', // TODO: verify Urdu
+  'vehicle.currentLoad': 'موجودہ بوجھ', // TODO: verify Urdu
+  'vehicle.capacityUsed': 'صلاحیت استعمال', // TODO: verify Urdu
+  'vehicle.reportIssue': 'گاڑی کا مسئلہ رپورٹ کریں', // TODO: verify Urdu
+  'vehicle.signalStrong': 'مضبوط', // TODO: verify Urdu
+  'vehicle.signalWeak': 'کمزور', // TODO: verify Urdu
+  'vehicle.excellent': 'بہترین', // TODO: verify Urdu
+  'vehicle.issue.desc': 'بتائیں کہ گاڑی میں کیا خرابی ہے، مرمت کو اطلاع دی جائے گی۔', // TODO: verify Urdu
+  'vehicle.issue.label': 'مسئلے کی تفصیل', // TODO: verify Urdu
+  'vehicle.issue.placeholder': 'مثال: بوجھ کے تحت بیٹری غیر معمولی تیزی سے گر رہی ہے…', // TODO: verify Urdu
+  'vehicle.issue.required': 'براہ کرم مسئلہ بتائیں', // TODO: verify Urdu
+  'vehicle.issue.submitted': 'مسئلہ مرمت کو رپورٹ کر دیا گیا', // TODO: verify Urdu
 
   // NotificationsPage
   'notif.title': 'اطلاعات',
   'notif.unread': 'نہ پڑھی گئی اطلاع',
   'notif.unreadPlural': 'نہ پڑھی گئی اطلاعات',
   'notif.markAllRead': 'سب کو پڑھا ہوا نشان لگائیں',
+  'notifications.weeklyPerformance': 'ہفتہ وار کارکردگی کا خلاصہ', // TODO: verify Urdu
+  'notifications.weeklyPerformanceBody': 'ہفتے کی کارکردگی کے اعداد و شمار تیار ہیں۔ 42 ڈیلیوریاں، 94% بروقت۔', // TODO: verify Urdu
+  'notifications.maintenanceReminder': 'گاڑی کی مرمت کی یاد دہانی', // TODO: verify Urdu
+  'notifications.maintenanceReminderBody': 'EV-02 کو 2,400 کلومیٹر بعد روٹین مرمت کی ضرورت ہے۔', // TODO: verify Urdu
+  'notifications.systemUpdate': 'سسٹم اپ ڈیٹ دستیاب', // TODO: verify Urdu
+  'notifications.systemUpdateBody': 'ڈرائیور ایپ کا نیا ورژن دستیاب ہے۔', // TODO: verify Urdu
+  'notifications.markAllRead': 'سب کو پڑھا ہوا نشان لگائیں', // TODO: verify Urdu
+  'notifications.allMarkedRead': 'تمام اطلاعات پڑھی ہوئی نشان لگ گئیں', // TODO: verify Urdu
+  'notifications.empty.title': 'آپ کے پاس سب کچھ پڑھا ہوا ہے', // TODO: verify Urdu
+  'notifications.empty.desc': 'ابھی کوئی نئی اطلاع نہیں ہے۔', // TODO: verify Urdu
 
   // ProfilePage
   'profile.since': 'جنوری 2025 سے رکن',
@@ -852,6 +1287,25 @@ const ur: Record<string, string> = {
   'profile.logout': 'لاگ آؤٹ',
   'profile.language': 'زبان',
   'profile.selectLanguage': 'زبان منتخب کریں',
+  'profile.statusActive': 'فعال', // TODO: verify Urdu
+  'profile.statusOffline': 'آف لائن', // TODO: verify Urdu
+  'profile.badge.topPerformer': 'بہترین کارکردگی', // TODO: verify Urdu
+  'profile.badge.workloadBalance': 'کام کا توازن', // TODO: verify Urdu
+  'profile.achievements': 'کامیابیاں', // TODO: verify Urdu
+  'profile.achievement.deliveries': '100 ڈیلیوریاں', // TODO: verify Urdu
+  'profile.achievement.zeroDelays': 'صفر تاخیر', // TODO: verify Urdu
+  'profile.achievement.efficiencyKing': 'کارکردگی کا بادشاہ', // TODO: verify Urdu
+  'profile.achievement.fiveYears': '5 سالہ تجربہ', // TODO: verify Urdu
+  'profile.achievement.fuelSaver': 'ایندھن بچانے والا', // TODO: verify Urdu
+  'profile.editProfile': 'پروفائل میں ترمیم', // TODO: verify Urdu
+  'profile.editProfileDesc': 'اپنا نام اور شفٹ کی حیثیت اپ ڈیٹ کریں۔', // TODO: verify Urdu
+  'profile.viewAllAchievements': 'تمام کامیابیاں دیکھیں', // TODO: verify Urdu
+  'profile.collapseAchievements': 'کم کامیابیاں دکھائیں', // TODO: verify Urdu
+  'profile.nameLabel': 'ڈسپلے نام', // TODO: verify Urdu
+  'profile.statusLabel': 'شفٹ کی حیثیت', // TODO: verify Urdu
+  'profile.savedToast': 'پروفائل اپ ڈیٹ ہو گئی', // TODO: verify Urdu
+  'profile.loggedOutToast': 'آپ لاگ آؤٹ ہو گئے ہیں', // TODO: verify Urdu
+  'profile.settingsComingSoon': 'موبائل ترتیبات جلد آرہی ہیں', // TODO: verify Urdu
 
   // IoT
   'iot.connected': 'IoT آلہ منسلک',
@@ -871,22 +1325,19 @@ const ur: Record<string, string> = {
   'iot.deviceConfig': 'آلہ IP',
   'iot.liveIndicator': 'براہ راست',
   'iot.recalcLast': 'آخری دوبارہ حساب',
+  'iot.lastKnownShort': 'آخری معلوم', // TODO: verify Urdu
 
-  // Fleet / Route / Analytics / Settings (fallback to English for web, only mobile matters)
-  'nav.overview': 'جائزہ',
-  'nav.liveFleet': 'لائیو فلیٹ',
-  'nav.optimization': 'اصلاح',
-  'nav.analytics': 'تجزیات',
-  'nav.compliance': 'تعمیل',
-  'nav.settings': 'ترتیبات',
-  'nav.portal': 'ڈسپیچر پورٹل v2.1',
-  'nav.project': 'سینئر ڈیزائن پروجیکٹ 2026',
-  'home.title': 'فلیٹ آپریشنز ڈیش بورڈ',
-  'home.subtitle': 'ہائبرڈ فلیٹ آپریشنز کی ریئل ٹائم نگرانی',
-  'fleet.title': 'لائیو فلیٹ نقشہ',
-  'route.title': 'راستے کی اصلاح',
-  'analytics.title': 'تجزیات اور رپورٹنگ',
-  'settings.title': 'ترتیبات',
+  // Common
+  'common.cancel': 'منسوخ', // TODO: verify Urdu
+  'common.submit': 'جمع کریں', // TODO: verify Urdu
+  'common.save': 'محفوظ کریں', // TODO: verify Urdu
+  'common.close': 'بند کریں', // TODO: verify Urdu
+
+  // Optimization extras
+  'optimization.fleetSize': 'فلیٹ کا حجم:', // TODO: verify Urdu
+  'optimization.activeRoutes': 'فعال راستے:', // TODO: verify Urdu
+  'optimization.algorithm': 'الگورتھم:', // TODO: verify Urdu
+  'optimization.geneticAlgorithm': 'جینیاتی الگورتھم', // TODO: verify Urdu
 };
 
 export const allTranslations: Record<Language, Record<string, string>> = { en, ar, ur };

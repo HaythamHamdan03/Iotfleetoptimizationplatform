@@ -1,9 +1,15 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
-import { MapPin, CheckCircle2, Clock, AlertTriangle, Package, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
+import { MapPin, CheckCircle2, Clock, AlertTriangle, Package, RefreshCw, Inbox } from 'lucide-react';
 import { mockDeliveryStops, mockVehicles, type DeliveryStop } from '@/app/data/mockData';
 import { useLanguage } from '@/app/i18n/LanguageContext';
 import { useIoT } from '@/app/context/IoTContext';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
+} from '@/app/components/ui/dialog';
+import { Button } from '@/app/components/ui/button';
+import { EmptyState } from '@/app/components/ui/EmptyState';
 import {
   fetchStreetRoute,
   fetchAlternateStreetRoute,
@@ -50,7 +56,28 @@ export function RouteNavigationPage() {
   } = useIoT();
 
   const [isRouting, setIsRouting] = useState(false);
+  const [deliveredIds, setDeliveredIds] = useState<Set<string>>(new Set());
+  const [delayDialogOpen, setDelayDialogOpen] = useState(false);
+  const [delayReason, setDelayReason] = useState<string>('traffic');
   const currentStop = mockDeliveryStops[currentStopIndex];
+
+  const handleMarkDelivered = () => {
+    if (!currentStop) return;
+    setDeliveredIds(prev => {
+      const next = new Set(prev);
+      next.add(currentStop.id);
+      return next;
+    });
+    toast.success(t('nav2.deliveredToast'));
+    if (currentStopIndex < mockDeliveryStops.length - 1) {
+      setCurrentStopIndex(currentStopIndex + 1);
+    }
+  };
+
+  const handleSubmitDelay = () => {
+    setDelayDialogOpen(false);
+    toast.success(t('nav2.delayReportedToast'));
+  };
 
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -222,7 +249,8 @@ export function RouteNavigationPage() {
     <div className="h-full flex flex-col">
 
       {/* MAP */}
-      <div className="relative isolate flex-shrink-0" style={{ height: '240px' }}>
+      {/* TODO: implement pull-to-refresh affordance once IoTContext exposes a refresh hook */}
+      <div className="relative isolate flex-shrink-0 h-[240px] landscape:h-[180px]">
         <div ref={mapContainerRef} className="absolute inset-0" />
 
         {/* Recalculate button overlay */}
@@ -260,19 +288,19 @@ export function RouteNavigationPage() {
 
       {/* LIVE STATS BAR */}
       {data && (
-        <div className={`flex items-center gap-3 px-3 py-2 bg-gray-900 text-white text-xs flex-shrink-0 flex-wrap ${isRTL ? 'flex-row-reverse' : ''}`}>
-          <span className="flex items-center gap-1 font-bold text-green-400">● {t('iot.liveIndicator')}</span>
+        <div className={`flex items-center gap-3 px-3 py-2 bg-gray-900 text-white text-xs flex-shrink-0 flex-wrap overflow-hidden ${isRTL ? 'flex-row-reverse' : ''}`}>
+          <span className="flex items-center gap-1 font-bold text-green-400 min-w-[60px]">● {t('iot.liveIndicator')}</span>
           <span className="text-gray-400">|</span>
-          <span className={`font-semibold ${speedColor}`}>{data.speed.toFixed(1)} km/h</span>
+          <span className={`font-semibold min-w-[60px] ${speedColor}`}>{data.speed.toFixed(1)} km/h</span>
           <span className="text-gray-400">|</span>
-          <span className="font-medium">{motionArrow(data.motion)} {data.motion}</span>
+          <span className="font-medium min-w-[60px]">{motionArrow(data.motion)} {data.motion}</span>
           <span className="text-gray-400">|</span>
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-1 min-w-[60px]">
             {data.temp.toFixed(1)}°C
             <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${tempBadge}`}>{data.temp_status}</span>
           </span>
           <span className="text-gray-400">|</span>
-          <span>🛰 {data.satellites}</span>
+          <span className="min-w-[60px]">🛰 {data.satellites}</span>
         </div>
       )}
 
@@ -317,13 +345,20 @@ export function RouteNavigationPage() {
             </div>
           </div>
           <div className="space-y-2">
-            <button className={`w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
+            <button
+              onClick={handleMarkDelivered}
+              disabled={deliveredIds.has(currentStop.id)}
+              className={`w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-150 font-medium flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none ${isRTL ? 'flex-row-reverse' : ''}`}
+            >
               <CheckCircle2 className="w-5 h-5" />
-              {t('nav2.markDelivered')}
+              {deliveredIds.has(currentStop.id) ? t('nav2.completed') : t('nav2.markDelivered')}
             </button>
-            <button className={`w-full px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center justify-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
+            <button
+              onClick={() => setDelayDialogOpen(true)}
+              className={`w-full px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-150 font-medium flex items-center justify-center gap-2 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none ${isRTL ? 'flex-row-reverse' : ''}`}
+            >
               <AlertTriangle className="w-5 h-5" />
-              Report Delay
+              {t('route.reportDelay')}
             </button>
           </div>
         </div>
@@ -335,6 +370,13 @@ export function RouteNavigationPage() {
           <h3 className={`text-sm font-semibold text-gray-900 mb-3 ${isRTL ? 'text-right' : ''}`}>
             {t('driver.stops')} ({mockDeliveryStops.length})
           </h3>
+          {mockDeliveryStops.length === 0 ? (
+            <EmptyState
+              icon={Inbox}
+              title={t('nav2.empty.title')}
+              description={t('nav2.empty.desc')}
+            />
+          ) : (
           <div className="space-y-2">
             {mockDeliveryStops.map((stop, index) => (
               <button key={stop.id} onClick={() => setCurrentStopIndex(index)}
@@ -363,8 +405,43 @@ export function RouteNavigationPage() {
               </button>
             ))}
           </div>
+          )}
         </div>
       </div>
+
+      <Dialog open={delayDialogOpen} onOpenChange={setDelayDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t('route.reportDelay')}</DialogTitle>
+            <DialogDescription>{t('nav2.delayDialogDesc')}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label htmlFor="delay-reason" className="text-sm font-medium text-foreground">
+              {t('nav2.delayReason')}
+            </label>
+            <select
+              id="delay-reason"
+              value={delayReason}
+              onChange={(e) => setDelayReason(e.target.value)}
+              className="w-full px-3 py-2 border rounded-md bg-background focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+            >
+              <option value="traffic">{t('nav2.delayReason.traffic')}</option>
+              <option value="weather">{t('nav2.delayReason.weather')}</option>
+              <option value="vehicle">{t('nav2.delayReason.vehicle')}</option>
+              <option value="customer">{t('nav2.delayReason.customer')}</option>
+              <option value="other">{t('nav2.delayReason.other')}</option>
+            </select>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">{t('common.cancel')}</Button>
+            </DialogClose>
+            <Button variant="default" onClick={handleSubmitDelay}>
+              {t('common.submit')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
