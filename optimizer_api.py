@@ -489,6 +489,102 @@ def optimize():
     return jsonify(response)
 
 
+@app.route('/fleet-routes', methods=['GET'])
+def fleet_routes():
+    """
+    Returns all DB vehicles with enriched route data for the Live Fleet map.
+    Always uses all 7 vehicles from MongoDB with 15 customers (seed=42) so
+    every vehicle gets a route. Uses the latest optimized run if one exists.
+    Stop statuses: first stop = completed, second = current, rest = upcoming,
+    last = final.
+    """
+    specs = load_vehicle_specs()
+    n_veh = len(specs)   # all vehicles in the DB (7)
+    n_cust = 15
+    seed = 42
+    source = 'baseline'
+
+    # Use latest optimized run if available (prefer its customer count/seed)
+    run = runs_col().find_one({}, sort=[("timestamp", -1)])
+    if run:
+        n_cust = max(n_cust, run.get('n_customers', 15))
+        seed = run.get('seed', 42)
+        source = 'optimized'
+
+    locations, vehicles_list = generate_data(n_cust, n_veh, seed=seed)
+    dist_matrix = build_distance_matrix(locations)
+
+    if run and source == 'optimized':
+        raw_routes = run['optimized']['routes']
+    else:
+        baseline = solve_baseline(locations, vehicles_list, dist_matrix)
+        raw_routes = baseline['routes']
+
+    depot = locations[0]
+
+    def assign_statuses(loc_ids):
+        stops = [loc_id for loc_id in loc_ids if loc_id != 0]
+        n = len(stops)
+        result = []
+        for i, loc_id in enumerate(stops):
+            loc = locations[loc_id]
+            if n == 1:
+                status = 'final'
+            elif i == 0:
+                status = 'completed'
+            elif i == 1 and n > 2:
+                status = 'current'
+            elif i == n - 1:
+                status = 'final'
+            else:
+                status = 'upcoming'
+            result.append({
+                'id': loc.id, 'name': loc.name,
+                'lat': loc.lat, 'lon': loc.lon,
+                'status': status,
+            })
+        return result
+
+    # Build output for vehicles that received a route
+    vehicles_out = []
+    routed_names = set()
+    for k, r in raw_routes.items():
+        stops = assign_statuses(r['route'])
+        vehicles_out.append({
+            'id':           f"V{int(k)+1:03d}",
+            'name':         r['vehicle'],
+            'vehicle_type': r['vehicle_type'],
+            'stops':        stops,
+            'distance_km':  r.get('distance_km', 0),
+            'cost_sar':     r.get('cost_sar', 0),
+            'co2_kg':       r.get('co2_kg', 0),
+            'load_kg':      r.get('load_kg', 0),
+            'idle':         False,
+        })
+        routed_names.add(r['vehicle'])
+
+    # Add idle vehicles (in DB but not assigned a route this run)
+    for spec in specs:
+        if spec['name'] not in routed_names:
+            vehicles_out.append({
+                'id':           f"IDLE_{spec['name'].replace(' ', '_')}",
+                'name':         spec['name'],
+                'vehicle_type': spec['vehicle_type'],
+                'stops':        [],
+                'distance_km':  0,
+                'cost_sar':     0,
+                'co2_kg':       0,
+                'load_kg':      0,
+                'idle':         True,
+            })
+
+    return jsonify(to_json_safe({
+        'depot':    {'name': depot.name, 'lat': depot.lat, 'lon': depot.lon},
+        'vehicles': vehicles_out,
+        'source':   source,
+    }))
+
+
 @app.route('/runs', methods=['GET'])
 def list_runs():
     """Returns the 20 most recent optimization runs from MongoDB."""

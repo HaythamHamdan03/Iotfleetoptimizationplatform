@@ -6,18 +6,11 @@ import {
 } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Skeleton } from '@/app/components/ui/skeleton';
-import { mockVehicles, mockDeliveryStops } from '@/app/data/mockData';
-import type { Vehicle, DeliveryStop } from '@/app/data/mockData';
 import { useLanguage } from '@/app/i18n/LanguageContext';
 import { useIoT } from '@/app/context/IoTContext';
 import type { Disruption } from '@/app/hooks/useDisruptionDetector';
 import { IOT_CONFIG } from '@/app/config/iotConfig';
-import {
-  fetchStreetRoute,
-  fetchAlternateStreetRoute,
-  type LatLng,
-} from '@/app/utils/streetRouting';
-import { renderStopMarkers, buildFinalStopIcon } from '@/app/utils/stopMarkers';
+import { fetchStreetRoute, fetchAlternateStreetRoute, type LatLng } from '@/app/utils/streetRouting';
 
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -25,9 +18,83 @@ L.Icon.Default.mergeOptions({
   shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).href,
 });
 
-// SPL Central Post Office — depot / origin for the active driver (Dammam).
-const BASE_LAT = 26.4352;
-const BASE_LON = 50.1082;
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type StopStatus = 'completed' | 'current' | 'upcoming' | 'final';
+
+interface FleetStop {
+  id: number;
+  name: string;
+  lat: number;
+  lon: number;
+  status: StopStatus;
+}
+
+interface FleetVehicle {
+  id: string;
+  name: string;
+  vehicle_type: 'ICE' | 'EV' | 'Hybrid';
+  stops: FleetStop[];
+  distance_km: number;
+  cost_sar: number;
+  co2_kg: number;
+  load_kg: number;
+  idle: boolean;
+}
+
+interface FleetRouteResponse {
+  depot: { name: string; lat: number; lon: number };
+  vehicles: FleetVehicle[];
+  source: 'optimized' | 'baseline';
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const DEPOT_LAT = 24.7136;
+const DEPOT_LON = 46.6753;
+
+const DRIVER_NAMES = [
+  'Mohammed Al-Saud', 'Abdullah Al-Otaibi', 'Khalid Al-Qahtani',
+  'Omar Al-Dosari', 'Faisal Al-Harbi', 'Saleh Al-Shehri', 'Tariq Al-Zahrani',
+];
+
+function stopIcon(status: StopStatus, label: number): L.DivIcon {
+  if (status === 'completed') {
+    return L.divIcon({
+      className: '',
+      html: `<div style="width:22px;height:22px;border-radius:50%;background:#9ca3af;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;">✓</div>`,
+      iconSize: [22, 22], iconAnchor: [11, 11],
+    });
+  }
+  if (status === 'current') {
+    return L.divIcon({
+      className: '',
+      html: `<div style="position:relative;width:36px;height:36px;"><span style="position:absolute;inset:0;border-radius:50%;background:rgba(37,99,235,.4);animation:stopPulse 1.6s ease-out infinite;"></span><span style="position:absolute;inset:8px;background:#2563eb;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.35);"></span></div>`,
+      iconSize: [36, 36], iconAnchor: [18, 18],
+    });
+  }
+  if (status === 'final') {
+    return L.divIcon({
+      className: '',
+      html: `<div style="display:flex;flex-direction:column;align-items:center;pointer-events:none;"><div style="background:#dc2626;color:#fff;border-radius:50%;width:34px;height:34px;border:3px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;">★</div><div style="background:#dc2626;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;margin-top:3px;white-space:nowrap;">Final</div></div>`,
+      iconSize: [70, 54], iconAnchor: [35, 44],
+    });
+  }
+  // upcoming
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:26px;height:26px;border-radius:50%;background:#fff;border:2px solid #2563eb;box-shadow:0 1px 4px rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;color:#1d4ed8;font-size:12px;font-weight:700;">${label}</div>`,
+    iconSize: [26, 26], iconAnchor: [13, 13],
+  });
+}
+
+function depotIcon(): L.DivIcon {
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:34px;height:34px;border-radius:50%;background:#1d4ed8;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-size:16px;">🏭</div>`,
+    iconSize: [34, 34], iconAnchor: [17, 17],
+  });
+}
 
 function timeAgo(date: Date): string {
   const sec = Math.floor((Date.now() - date.getTime()) / 1000);
@@ -41,30 +108,7 @@ function formatDisruptionType(type: Disruption['type']): string {
   return type.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
 }
 
-const vehicleColor = (status: Vehicle['status']) =>
-  status === 'on-route' ? '#16a34a' : status === 'delayed' ? '#dc2626' : '#6b7280';
-
-// Muted palette for other vehicles' planned routes (distinct from blue/amber).
-const ROUTE_COLORS: Record<string, string> = {
-  V001: '#64748b', // slate
-  V003: '#0d9488', // teal
-  V004: '#a3a847', // olive
-  V005: '#8b5cf6', // purple
-  V006: '#6b7280', // gray
-};
-
-// Active driver (V002 / EV-02) — the stops for the blue/amber live polyline.
-const activeVehicle = mockVehicles.find(v => v.id === 'V002');
-const activeRouteStops: DeliveryStop[] = (activeVehicle?.routeStopIds ?? [])
-  .map(id => mockDeliveryStops.find(s => s.id === id))
-  .filter((s): s is DeliveryStop => !!s);
-const activeFinalStopId = activeRouteStops[activeRouteStops.length - 1]?.id;
-
-function stopsForVehicle(v: Vehicle): DeliveryStop[] {
-  return v.routeStopIds
-    .map(id => mockDeliveryStops.find(s => s.id === id))
-    .filter((s): s is DeliveryStop => !!s);
-}
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export function LiveFleetMapPage() {
   const { t, isRTL } = useLanguage();
@@ -84,18 +128,23 @@ export function LiveFleetMapPage() {
     triggerManualRecalc,
   } = useIoT();
 
+  // Map refs
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const ev02MarkerRef = useRef<L.CircleMarker | null>(null);
-  const mockMarkerRefs = useRef<Map<string, L.CircleMarker>>(new Map());
   const routePolylineRef = useRef<L.Polyline | null>(null);
   const prevActivePathRef = useRef<LatLng[] | null>(null);
-  const finalStopMarkerRef = useRef<L.Marker | null>(null);
-  const vehicleRouteLayersRef = useRef<Map<string, L.Polyline>>(new Map());
+  const routingTokenRef = useRef(0);
+  const activeRouteStopsRef = useRef<Array<{ lat: number; lon: number }>>([]);
+  const routesDrawnRef = useRef(false);
   const prevIsRecalcRef = useRef(false);
   const prevManualRecalcTickRef = useRef(manualRecalcTick);
-  const routingTokenRef = useRef(0);
 
+  // Per-vehicle layers: polyline + stop markers
+  const vehiclePolylinesRef = useRef<Map<string, L.Polyline>>(new Map());
+  const vehicleMarkersRef = useRef<Map<string, L.Marker[]>>(new Map());
+
+  // UI state
   const [logOpen, setLogOpen] = useState(true);
   const [deviceIpEdit, setDeviceIpEdit] = useState(false);
   const [deviceIp, setDeviceIp] = useState(IOT_CONFIG.DEVICE_URL.replace('http://', ''));
@@ -104,156 +153,115 @@ export function LiveFleetMapPage() {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() =>
     typeof window === 'undefined' ? true : window.innerWidth >= 1024
   );
+  const [fleetRoutes, setFleetRoutes] = useState<FleetRouteResponse | null>(null);
+  const [routesLoading, setRoutesLoading] = useState(true);
 
   useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth < 1024) setSidebarOpen(false);
-      else setSidebarOpen(true);
-    };
+    const handleResize = () => setSidebarOpen(window.innerWidth >= 1024);
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const unresolvedDisruptions = disruptions.filter((d: Disruption) => d.resolvedAt === null);
-  const selectedVehicle = selectedVehicleId === 'EV-02'
-    ? null
-    : mockVehicles.find(v => v.id === selectedVehicleId) ?? null;
-
-  const panTo = useCallback((lat: number, lng: number) => {
-    mapRef.current?.setView([lat, lng], 14, { animate: true });
+  // Fetch all vehicle routes from MongoDB via Flask
+  useEffect(() => {
+    fetch('/optimizer/fleet-routes')
+      .then(r => r.json())
+      .then((d: FleetRouteResponse) => setFleetRoutes(d))
+      .catch(() => setFleetRoutes(null))
+      .finally(() => setRoutesLoading(false));
   }, []);
 
-  const selectVehicle = useCallback((id: string, lat: number, lng: number) => {
-    setSelectedVehicleId(id);
-    panTo(lat, lng);
-  }, [panTo]);
+  const unresolvedDisruptions = disruptions.filter((d: Disruption) => d.resolvedAt === null);
+  const selectedVehicle = fleetRoutes?.vehicles.find(v => v.id === selectedVehicleId) ?? null;
 
-  // Compute a street-following route from (lat,lon) through the active driver's stops,
-  // then replace the polyline. `asRecalc=false` -> initial blue solid; `true` -> amber
-  // dashed route that meaningfully diverges from the previous path.
-  const computeRoute = useCallback(async (lat: number, lon: number, asRecalc: boolean) => {
+  const panTo = useCallback((lat: number, lng: number, zoom = 14) => {
+    mapRef.current?.setView([lat, lng], zoom, { animate: true });
+  }, []);
+
+  // Solo mode: hide all vehicle routes/markers, show only the selected vehicle's
+  const applySoloMode = useCallback((vehicleId: string | null) => {
+    vehiclePolylinesRef.current.forEach((poly, vid) => {
+      if (!vehicleId || vid === vehicleId) {
+        poly.setStyle({ opacity: 0.9, weight: 5 });
+        poly.bringToFront();
+      } else {
+        poly.setStyle({ opacity: 0, weight: 0 });
+      }
+    });
+    vehicleMarkersRef.current.forEach((markers, vid) => {
+      markers.forEach(m => {
+        if (!vehicleId || vid === vehicleId) {
+          m.setOpacity(1);
+        } else {
+          m.setOpacity(0);
+        }
+      });
+    });
+  }, []);
+
+  const selectVehicle = useCallback((id: string) => {
+    setSelectedVehicleId(id);
+    applySoloMode(id);
+    // Fit map to this vehicle's stops
+    const vehicle = fleetRoutes?.vehicles.find(v => v.id === id);
+    const depot = fleetRoutes?.depot;
+    if (vehicle && depot && mapRef.current && vehicle.stops.length > 0) {
+      const lats = [depot.lat, ...vehicle.stops.map(s => s.lat)];
+      const lons = [depot.lon, ...vehicle.stops.map(s => s.lon)];
+      const bounds = L.latLngBounds(
+        [Math.min(...lats), Math.min(...lons)],
+        [Math.max(...lats), Math.max(...lons)]
+      );
+      mapRef.current.fitBounds(bounds, { padding: [40, 40], animate: true });
+    }
+  }, [fleetRoutes, applySoloMode]);
+
+  // EV-02 route: blue solid (initial) or amber dashed (recalculated)
+  const computeEV02Route = useCallback(async (lat: number, lon: number, asRecalc: boolean) => {
     if (!mapRef.current) return;
     const token = ++routingTokenRef.current;
     setIsRouting(true);
     const waypoints: LatLng[] = [
       [lat, lon],
-      ...activeRouteStops.map(s => [s.lat, s.lng] as LatLng),
+      ...activeRouteStopsRef.current.map(s => [s.lat, s.lon] as LatLng),
     ];
-
     const path = asRecalc
       ? await fetchAlternateStreetRoute(waypoints, prevActivePathRef.current, 5)
       : await fetchStreetRoute(waypoints);
 
-    if (token !== routingTokenRef.current || !mapRef.current) {
-      setIsRouting(false);
-      return;
-    }
+    if (token !== routingTokenRef.current || !mapRef.current) { setIsRouting(false); return; }
 
-    const previous = routePolylineRef.current;
-    if (previous) {
-      previous.setStyle({ opacity: 0 });
-      setTimeout(() => {
-        previous.remove();
-      }, 500);
-    }
-
-    const baseOpts: L.PolylineOptions = asRecalc
-      ? {
-          color: '#f59e0b',
-          weight: 5,
-          opacity: 0.95,
-          dashArray: '10 8',
-          className: 'route-polyline route-recalc',
-        }
-      : {
-          color: '#2563eb',
-          weight: 4,
-          opacity: 0.9,
-          className: 'route-polyline route-initial',
-        };
+    const prev = routePolylineRef.current;
+    if (prev) { prev.setStyle({ opacity: 0 }); setTimeout(() => prev.remove(), 500); }
 
     routePolylineRef.current = L.polyline(path, {
-      ...baseOpts,
-      lineJoin: 'round',
-      lineCap: 'round',
+      color: asRecalc ? '#f59e0b' : '#1d4ed8',
+      weight: 5, opacity: 0.9,
+      dashArray: asRecalc ? '10 8' : undefined,
+      lineJoin: 'round', lineCap: 'round',
     }).addTo(mapRef.current);
 
     prevActivePathRef.current = path;
-
     if (asRecalc) setHasRecalculated(true);
     setIsRouting(false);
   }, [setHasRecalculated]);
 
-  // Init map once
+  // Init base map once
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
-
     const map = L.map(mapContainerRef.current, { zoomControl: true })
-      .setView([BASE_LAT, BASE_LON], 12);
+      .setView([DEPOT_LAT, DEPOT_LON], 12);
     mapRef.current = map;
-
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors',
-      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors', maxZoom: 19,
     }).addTo(map);
 
-    // Render every delivery stop with the proper visual hierarchy
-    const { finalMarker } = renderStopMarkers(
-      map,
-      mockDeliveryStops,
-      t('fleet.finalStop'),
-      activeFinalStopId
-    );
-    finalStopMarkerRef.current = finalMarker;
-
-    // Compute and draw each non-active vehicle's planned route in a muted color
-    mockVehicles.filter(v => v.id !== 'V002').forEach(v => {
-      const stops = stopsForVehicle(v);
-      if (stops.length < 1) return;
-      const waypoints: LatLng[] = [
-        [v.lat, v.lng],
-        ...stops.map(s => [s.lat, s.lng] as LatLng),
-      ];
-      fetchStreetRoute(waypoints).then(path => {
-        if (!mapRef.current) return;
-        const polyline = L.polyline(path, {
-          color: ROUTE_COLORS[v.id] ?? '#6b7280',
-          weight: 3,
-          opacity: 0.45,
-          lineJoin: 'round',
-          lineCap: 'round',
-        }).addTo(mapRef.current);
-        polyline.bringToBack();
-        vehicleRouteLayersRef.current.set(v.id, polyline);
-      });
-    });
-
-    // Compute the active driver's initial street-following route (blue solid)
-    computeRoute(BASE_LAT, BASE_LON, false);
-
-    // Static mock vehicle markers (excluding EV-02)
-    mockVehicles.filter(v => v.id !== 'V002').forEach(v => {
-      const m = L.circleMarker([v.lat, v.lng], {
-        radius: 9,
-        fillColor: vehicleColor(v.status),
-        color: '#fff',
-        weight: 2,
-        fillOpacity: 0.9,
-      }).addTo(map).bindPopup(`<b>${v.name}</b><br>${v.driverName}<br>${v.status}`);
-      m.on('click', () => selectVehicle(v.id, v.lat, v.lng));
-      mockMarkerRefs.current.set(v.id, m);
-    });
-
-    // EV-02 live marker
-    const ev02 = L.circleMarker([BASE_LAT, BASE_LON], {
-      radius: 14,
-      fillColor: '#2563eb',
-      color: '#1d4ed8',
-      weight: 3,
-      fillOpacity: 0.9,
+    // EV-02 live marker (blue dot, updates from IoT GPS)
+    const ev02 = L.circleMarker([DEPOT_LAT, DEPOT_LON], {
+      radius: 14, fillColor: '#2563eb', color: '#1d4ed8', weight: 3, fillOpacity: 0.9,
     }).addTo(map);
-    ev02.bindPopup(t('fleet.vehicleLoading'));
+    ev02.bindPopup('EV-02 (Live IoT)');
     ev02.on('click', () => setSelectedVehicleId('EV-02'));
     ev02MarkerRef.current = ev02;
 
@@ -262,65 +270,120 @@ export function LiveFleetMapPage() {
       mapRef.current = null;
       ev02MarkerRef.current = null;
       routePolylineRef.current = null;
-      finalStopMarkerRef.current = null;
-      mockMarkerRefs.current.clear();
-      vehicleRouteLayersRef.current.clear();
+      vehiclePolylinesRef.current.clear();
+      vehicleMarkersRef.current.clear();
+      routesDrawnRef.current = false;
     };
-    // t intentionally not in deps: language changes update the icon via a separate effect
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectVehicle, computeRoute]);
+  }, []);
 
-  // Highlight the selected vehicle's planned-route polyline
+  // Draw all vehicle routes + stops when fleet data arrives
   useEffect(() => {
-    vehicleRouteLayersRef.current.forEach((polyline, vehicleId) => {
-      const isSelected = vehicleId === selectedVehicleId;
-      polyline.setStyle({
-        opacity: isSelected ? 0.9 : 0.4,
-        weight: isSelected ? 5 : 3,
-      });
-      if (isSelected) polyline.bringToFront();
-    });
-  }, [selectedVehicleId]);
+    if (!fleetRoutes || !mapRef.current || routesDrawnRef.current) return;
+    routesDrawnRef.current = true;
+    const map = mapRef.current;
+    const depot = fleetRoutes.depot;
 
-  // Update final-stop marker label when language changes
-  useEffect(() => {
-    finalStopMarkerRef.current?.setIcon(buildFinalStopIcon(t('fleet.finalStop')));
-  }, [t]);
+    // Depot marker
+    L.marker([depot.lat, depot.lon], { icon: depotIcon(), keyboard: false })
+      .addTo(map)
+      .bindTooltip(`🏭 ${depot.name}`, { direction: 'top' });
 
-  // Update EV-02 marker as vehicle moves (route is recomputed only on recalc, not per tick)
-  useEffect(() => {
-    if (!data?.gps_fix) return;
-    if (ev02MarkerRef.current) {
-      ev02MarkerRef.current.setLatLng([data.lat, data.lon]);
-      ev02MarkerRef.current.setPopupContent(
-        `EV-02 | ${data.speed.toFixed(1)} km/h | ${data.motion} | ${data.temp.toFixed(1)}°C`
-      );
+    // Set EV-02 stops from first vehicle
+    const ev02Vehicle = fleetRoutes.vehicles.find(v => !v.idle);
+    if (ev02Vehicle) {
+      activeRouteStopsRef.current = ev02Vehicle.stops.map(s => ({ lat: s.lat, lon: s.lon }));
     }
+
+    // Draw each vehicle's route and stop markers (all hidden initially)
+    fleetRoutes.vehicles.forEach((vehicle, vIdx) => {
+      if (vehicle.idle || vehicle.stops.length === 0) return;
+
+      const markers: L.Marker[] = [];
+
+      // Stop markers
+      let upcomingCount = 0;
+      vehicle.stops.forEach(stop => {
+        const label = stop.status === 'upcoming' ? ++upcomingCount : 0;
+        const marker = L.marker([stop.lat, stop.lon], {
+          icon: stopIcon(stop.status, label),
+          interactive: true, keyboard: false,
+          opacity: 0,
+        })
+          .addTo(map)
+          .bindTooltip(
+            `<b>${stop.name}</b><br><span style="font-size:11px;color:#6b7280;">${stop.status.charAt(0).toUpperCase() + stop.status.slice(1)}</span>`,
+            { direction: 'top', offset: [0, -8] }
+          );
+        markers.push(marker);
+      });
+      vehicleMarkersRef.current.set(vehicle.id, markers);
+
+      // Route polyline via OSRM (all blue, hidden until vehicle is selected)
+      const waypoints: LatLng[] = [
+        [depot.lat, depot.lon],
+        ...vehicle.stops.map(s => [s.lat, s.lon] as LatLng),
+        [depot.lat, depot.lon],
+      ];
+      fetchStreetRoute(waypoints).then(path => {
+        if (!mapRef.current) return;
+        const poly = L.polyline(path, {
+          color: '#2563eb', weight: 5, opacity: 0,
+          lineJoin: 'round', lineCap: 'round',
+        }).addTo(mapRef.current);
+        vehiclePolylinesRef.current.set(vehicle.id, poly);
+      });
+
+      // Offset vehicle marker at depot so they don't overlap
+      const offsets = [[0, 0], [0.0012, 0], [-0.0012, 0], [0, 0.0012], [0, -0.0012], [0.0012, 0.0012], [-0.0012, -0.0012]];
+      const [dLat, dLon] = offsets[vIdx % offsets.length];
+      const vColor = vehicle.vehicle_type === 'EV' ? '#16a34a' : vehicle.vehicle_type === 'Hybrid' ? '#7c3aed' : '#6b7280';
+      L.circleMarker([depot.lat + dLat, depot.lon + dLon], {
+        radius: 9, fillColor: vColor, color: '#fff', weight: 2, fillOpacity: 0.9,
+      }).addTo(map)
+        .bindPopup(`<b>${vehicle.name}</b><br>${DRIVER_NAMES[vIdx] ?? 'Driver'}<br>${vehicle.stops.length} stops`)
+        .on('click', () => selectVehicle(vehicle.id));
+    });
+
+    // Show first vehicle's route by default
+    const firstActive = fleetRoutes.vehicles.find(v => !v.idle);
+    if (firstActive) {
+      // Wait briefly for OSRM fetch to complete
+      setTimeout(() => {
+        setSelectedVehicleId(firstActive.id);
+        applySoloMode(firstActive.id);
+      }, 1500);
+    }
+
+    // Compute EV-02's route (solid blue)
+    const startLat = data?.lat ?? depot.lat;
+    const startLon = data?.lon ?? depot.lon;
+    computeEV02Route(startLat, startLon, false);
+  }, [fleetRoutes, computeEV02Route, selectVehicle, applySoloMode, data]);
+
+  // Update EV-02 marker from live IoT GPS
+  useEffect(() => {
+    if (!data?.gps_fix || !ev02MarkerRef.current) return;
+    ev02MarkerRef.current.setLatLng([data.lat, data.lon]);
+    ev02MarkerRef.current.setPopupContent(
+      `EV-02 | ${data.speed.toFixed(1)} km/h | ${data.motion} | ${data.temp.toFixed(1)}°C`
+    );
   }, [data]);
 
-  // When automatic recalculation completes, redraw as the amber dashed "recalculated" route
+  // Redraw EV-02 route after automatic recalculation
   useEffect(() => {
-    const wasRecalculating = prevIsRecalcRef.current;
+    const was = prevIsRecalcRef.current;
     prevIsRecalcRef.current = isRecalculating;
-    if (!wasRecalculating || isRecalculating) return;
+    if (!was || isRecalculating) return;
+    computeEV02Route(data?.lat ?? DEPOT_LAT, data?.lon ?? DEPOT_LON, true);
+  }, [isRecalculating, data, computeEV02Route]);
 
-    const lat = data?.lat ?? BASE_LAT;
-    const lon = data?.lon ?? BASE_LON;
-    computeRoute(lat, lon, true);
-  }, [isRecalculating, data, computeRoute]);
-
-  // React to manual recalc triggered from any view
+  // Manual recalc
   useEffect(() => {
     if (manualRecalcTick === prevManualRecalcTickRef.current) return;
     prevManualRecalcTickRef.current = manualRecalcTick;
-    const lat = data?.lat ?? BASE_LAT;
-    const lon = data?.lon ?? BASE_LON;
-    computeRoute(lat, lon, true);
-  }, [manualRecalcTick, data, computeRoute]);
-
-  const handleManualRecalc = () => {
-    triggerManualRecalc();
-  };
+    computeEV02Route(data?.lat ?? DEPOT_LAT, data?.lon ?? DEPOT_LON, true);
+  }, [manualRecalcTick, data, computeEV02Route]);
 
   const reliabilityColor =
     systemReliability >= 97 ? 'bg-green-100 text-green-700' :
@@ -329,13 +392,11 @@ export function LiveFleetMapPage() {
 
   const severityBadge = (s: Disruption['severity']) =>
     s === 'high' ? 'bg-red-100 text-red-700' :
-    s === 'medium' ? 'bg-amber-100 text-amber-700' :
-    'bg-blue-100 text-blue-700';
+    s === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700';
 
   const tempBadge = (status: string) =>
     status === 'TOO HOT' ? 'bg-red-100 text-red-700' :
-    status === 'WARM' ? 'bg-amber-100 text-amber-700' :
-    'bg-green-100 text-green-700';
+    status === 'WARM' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700';
 
   return (
     <div className={`h-full flex flex-col ${isRTL ? 'direction-rtl' : ''}`}>
@@ -358,67 +419,54 @@ export function LiveFleetMapPage() {
             </>
           )}
         </div>
-
         <div className="h-4 w-px bg-gray-300" />
         <span className={`px-2 py-0.5 rounded text-xs font-semibold ${reliabilityColor}`}>
           {t('iot.reliability')}: {systemReliability.toFixed(1)}%
         </span>
-
         {recalcTimeMs !== null && (
-          <>
-            <div className="h-4 w-px bg-gray-300" />
-            <span className="text-xs text-gray-600">
-              {t('iot.recalcLast')}: {(recalcTimeMs / 1000).toFixed(1)}s
-            </span>
-          </>
+          <><div className="h-4 w-px bg-gray-300" />
+          <span className="text-xs text-gray-600">{t('iot.recalcLast')}: {(recalcTimeMs / 1000).toFixed(1)}s</span></>
         )}
-
         {unresolvedDisruptions.length > 0 && (
-          <>
-            <div className="h-4 w-px bg-gray-300" />
-            <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-700">
-              ⚠ {unresolvedDisruptions.length} {t('iot.disruption')}
-            </span>
-          </>
+          <><div className="h-4 w-px bg-gray-300" />
+          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-700">
+            ⚠ {unresolvedDisruptions.length} {t('iot.disruption')}
+          </span></>
         )}
-
         <div className="h-4 w-px bg-gray-300" />
         <div className="flex items-center gap-1 text-xs text-gray-600">
           <Satellite className="w-3.5 h-3.5" />
           <span>{data?.satellites ?? '—'} sats</span>
         </div>
-
+        {fleetRoutes && (
+          <><div className="h-4 w-px bg-gray-300" />
+          <span className="text-xs text-gray-500">
+            <span className="font-medium text-gray-800">{fleetRoutes.source}</span>
+            {' · '}{fleetRoutes.vehicles.filter(v => !v.idle).length} active · {fleetRoutes.depot.name}
+          </span></>
+        )}
         <button
           onClick={() => data && panTo(data.lat, data.lon)}
           className="ml-2 px-2 py-1 text-xs bg-amber-50 border border-amber-300 text-amber-700 rounded hover:bg-amber-100 transition-colors flex items-center gap-1"
         >
           <Zap className="w-3 h-3" /> Track EV-02
         </button>
-
         <button
-          onClick={handleManualRecalc}
+          onClick={() => triggerManualRecalc()}
           disabled={isRouting}
-          className="px-2 py-1 text-xs bg-blue-50 border border-blue-300 text-blue-700 rounded hover:bg-blue-100 disabled:opacity-60 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
-          title={t('fleet.recalculate')}
+          className="px-2 py-1 text-xs bg-blue-50 border border-blue-300 text-blue-700 rounded hover:bg-blue-100 disabled:opacity-60 transition-colors flex items-center gap-1"
         >
           <RefreshCw className={`w-3 h-3 ${isRouting ? 'animate-spin' : ''}`} />
           {isRouting ? t('fleet.routing') : t('fleet.recalculate')}
         </button>
-
         <div className="ml-auto flex items-center gap-2">
           {deviceIpEdit ? (
-            <input
-              className="text-xs border border-gray-300 rounded px-2 py-0.5 w-36 focus:outline-none focus:ring-1 focus:ring-blue-400"
-              value={deviceIp}
-              onChange={e => setDeviceIp(e.target.value)}
-              onBlur={() => setDeviceIpEdit(false)}
-              autoFocus
-            />
+            <input className="text-xs border border-gray-300 rounded px-2 py-0.5 w-36 focus:outline-none"
+              value={deviceIp} onChange={e => setDeviceIp(e.target.value)}
+              onBlur={() => setDeviceIpEdit(false)} autoFocus />
           ) : (
-            <button
-              onClick={() => setDeviceIpEdit(true)}
-              className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded hover:bg-gray-100"
-            >
+            <button onClick={() => setDeviceIpEdit(true)}
+              className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded hover:bg-gray-100">
               <Settings className="w-3.5 h-3.5" />
               {t('iot.deviceConfig')}: {deviceIp}
             </button>
@@ -429,97 +477,77 @@ export function LiveFleetMapPage() {
       {/* MAIN CONTENT */}
       <div className={`flex flex-1 min-h-0 ${isRTL ? 'flex-row-reverse' : ''}`}>
 
-        {/* MAP — isolate contains Leaflet z-indexes */}
+        {/* MAP */}
         <div className="flex-1 relative isolate" role="application" aria-label={t('fleet.mapAriaLabel')}>
           <div ref={mapContainerRef} className="absolute inset-0" />
 
           {isRecalculating && (
-            <div
-              className="absolute top-3 right-3 bg-amber-500 text-white px-3 py-2 rounded-lg shadow-lg text-sm font-medium animate-pulse flex items-center gap-2"
-              style={{ zIndex: 1000 }}
-            >
+            <div className="absolute top-3 right-3 bg-amber-500 text-white px-3 py-2 rounded-lg shadow-lg text-sm font-medium animate-pulse flex items-center gap-2" style={{ zIndex: 1000 }}>
               ⚡ {t('iot.recalculating')}
             </div>
           )}
+          {routesLoading && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-white border border-gray-200 shadow px-3 py-1.5 rounded text-xs text-gray-600 flex items-center gap-2" style={{ zIndex: 1000 }}>
+              <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              Loading Riyadh routes from MongoDB…
+            </div>
+          )}
 
-          {/* Route legend (bottom-left) */}
-          <div
-            className="absolute bottom-2 left-2 bg-white/95 backdrop-blur border border-gray-200 shadow-md rounded-md px-2.5 py-1.5 text-[10px] text-gray-700"
-            style={{ zIndex: 1000 }}
-          >
-            <div className="font-semibold text-gray-900 mb-1">{t('fleet.legend.title')}</div>
-            <div className="flex items-center gap-1.5 mb-0.5">
-              <svg width="22" height="6" viewBox="0 0 22 6" aria-hidden="true">
-                <line x1="0" y1="3" x2="22" y2="3" stroke="hsl(var(--chart-1))" strokeWidth="3" strokeLinecap="round" />
-              </svg>
-              <span className={hasRecalculated ? 'text-gray-400' : ''}>{t('fleet.legend.original')}</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <svg width="22" height="6" viewBox="0 0 22 6" aria-hidden="true">
-                <line x1="0" y1="3" x2="22" y2="3" stroke="hsl(var(--chart-4))" strokeWidth="4" strokeDasharray="4 3" strokeLinecap="round" />
-              </svg>
-              <span className={hasRecalculated ? 'font-semibold text-amber-700' : ''}>{t('fleet.legend.recalc')}</span>
-            </div>
+          {/* Legend */}
+          <div className="absolute bottom-2 left-2 bg-white/95 border border-gray-200 shadow-md rounded-md px-2.5 py-2 text-[10px] text-gray-700 space-y-1" style={{ zIndex: 1000 }}>
+            <div className="font-semibold text-gray-900 mb-1">Stop Legend</div>
+            <div className="flex items-center gap-1.5"><span style={{ background: '#9ca3af', color: '#fff', borderRadius: '50%', width: 16, height: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>✓</span> Completed</div>
+            <div className="flex items-center gap-1.5"><span style={{ background: '#2563eb', borderRadius: '50%', width: 14, height: 14, display: 'inline-block', border: '2px solid #fff', boxShadow: '0 0 0 2px #93c5fd' }} /> Current</div>
+            <div className="flex items-center gap-1.5"><span style={{ background: '#fff', border: '2px solid #2563eb', borderRadius: '50%', width: 16, height: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#1d4ed8', fontWeight: 700 }}>N</span> Upcoming</div>
+            <div className="flex items-center gap-1.5"><span style={{ color: '#dc2626', fontSize: 14 }}>★</span> Final stop</div>
+            {hasRecalculated && <div className="flex items-center gap-1.5 pt-0.5 border-t border-gray-200"><svg width="18" height="5"><line x1="0" y1="2.5" x2="18" y2="2.5" stroke="#f59e0b" strokeWidth="3" strokeDasharray="4 3" /></svg> Recalculated</div>}
           </div>
         </div>
 
-        {/* SIDEBAR TOGGLE — anchored on the inner edge of the sidebar */}
-        <Button
-          variant="outline"
-          size="icon"
+        {/* SIDEBAR TOGGLE */}
+        <Button variant="outline" size="icon"
           onClick={() => setSidebarOpen(o => !o)}
-          aria-label={sidebarOpen ? t('fleet.collapseSidebar') : t('fleet.expandSidebar')}
-          aria-expanded={sidebarOpen}
-          className={`self-center z-10 h-10 w-6 rounded-none border-y border-gray-200 bg-white hover:bg-muted transition-colors duration-150 ${isRTL ? 'border-l-0 border-r' : 'border-r-0 border-l'}`}
-        >
+          className={`self-center z-10 h-10 w-6 rounded-none border-y border-gray-200 bg-white hover:bg-muted ${isRTL ? 'border-l-0 border-r' : 'border-r-0 border-l'}`}>
           {sidebarOpen
             ? (isRTL ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />)
             : (isRTL ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />)}
         </Button>
 
         {/* RIGHT SIDEBAR */}
-        <div
-          className={`bg-white overflow-y-auto flex-shrink-0 ${isRTL ? 'border-r' : 'border-l'} border-gray-200 flex flex-col transition-all duration-300 ${
-            sidebarOpen ? 'w-80' : 'w-0 overflow-hidden border-0'
-          }`}
-          aria-hidden={!sidebarOpen}
-        >
+        <div className={`bg-white overflow-y-auto flex-shrink-0 ${isRTL ? 'border-r' : 'border-l'} border-gray-200 flex flex-col transition-all duration-300 ${sidebarOpen ? 'w-80' : 'w-0 overflow-hidden border-0'}`}>
 
           {/* Selected vehicle detail */}
-          {selectedVehicleId && (
+          {selectedVehicle && (
             <div className="p-4 border-b border-blue-100 bg-blue-50 flex-shrink-0">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold text-blue-900">
-                  {selectedVehicleId === 'EV-02' ? 'EV-02 — Live' : selectedVehicle?.name}
-                </h3>
-                <button onClick={() => setSelectedVehicleId(null)} className="text-xs text-blue-400 hover:text-blue-600">✕</button>
+                <h3 className="text-sm font-semibold text-blue-900">{selectedVehicle.name}</h3>
+                <button onClick={() => { setSelectedVehicleId(null); applySoloMode(null); }} className="text-xs text-blue-400 hover:text-blue-600">✕ Show all</button>
               </div>
-
-              {selectedVehicleId === 'EV-02' && data ? (
-                <div className="space-y-1 text-xs text-blue-900">
-                  <p><span className="text-blue-500">Driver:</span> Mohammed Al-Saud</p>
-                  <p><span className="text-blue-500">Speed:</span> {data.speed.toFixed(1)} km/h</p>
-                  <p><span className="text-blue-500">Motion:</span> {data.motion}</p>
-                  <p>
-                    <span className="text-blue-500">Temp:</span> {data.temp.toFixed(1)}°C
-                    <span className={`ml-1 px-1 rounded text-xs font-semibold ${tempBadge(data.temp_status)}`}>{data.temp_status}</span>
-                  </p>
-                  <p><span className="text-blue-500">Humidity:</span> {data.humidity.toFixed(1)}%</p>
-                  <p><span className="text-blue-500">Altitude:</span> {data.altitude.toFixed(1)} m</p>
-                  <p><span className="text-blue-500">GPS:</span> {data.gps_status} · {data.satellites} sats</p>
-                  <p><span className="text-blue-500">Coords:</span> {data.lat.toFixed(5)}, {data.lon.toFixed(5)}</p>
-                </div>
-              ) : selectedVehicle ? (
-                <div className="space-y-1 text-xs text-blue-900">
-                  <p><span className="text-blue-500">Driver:</span> {selectedVehicle.driverName}</p>
-                  <p><span className="text-blue-500">Status:</span> {selectedVehicle.status}</p>
-                  <p><span className="text-blue-500">Coords:</span> {selectedVehicle.lat.toFixed(4)}, {selectedVehicle.lng.toFixed(4)}</p>
-                  {selectedVehicle.type === 'ev'
-                    ? <p><span className="text-blue-500">Battery:</span> {selectedVehicle.batteryLevel}%</p>
-                    : <p><span className="text-blue-500">Fuel:</span> {selectedVehicle.fuelLevel}%</p>}
-                  <p><span className="text-blue-500">Load:</span> {selectedVehicle.currentLoad}/{selectedVehicle.maxLoad} kg</p>
-                </div>
-              ) : null}
+              <div className="space-y-1 text-xs text-blue-900">
+                <p><span className="text-blue-500">Type:</span> {selectedVehicle.vehicle_type}</p>
+                <p><span className="text-blue-500">Distance:</span> {selectedVehicle.distance_km} km</p>
+                <p><span className="text-blue-500">Cost:</span> {selectedVehicle.cost_sar} SAR</p>
+                <p><span className="text-blue-500">CO₂:</span> {selectedVehicle.co2_kg} kg</p>
+                <p><span className="text-blue-500">Load:</span> {selectedVehicle.load_kg} kg</p>
+                {selectedVehicle.stops.length > 0 && (
+                  <div className="border-t border-blue-200 pt-1 mt-1">
+                    <p className="font-semibold text-blue-700 mb-1">Stops ({selectedVehicle.stops.length})</p>
+                    {selectedVehicle.stops.map((s, i) => (
+                      <div key={s.id} className="flex items-center gap-1.5 mb-0.5">
+                        <span className={`w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold ${
+                          s.status === 'completed' ? 'bg-gray-400 text-white' :
+                          s.status === 'current'   ? 'bg-blue-600 text-white' :
+                          s.status === 'final'     ? 'bg-red-600 text-white'  :
+                          'bg-white border border-blue-500 text-blue-700'
+                        }`}>
+                          {s.status === 'completed' ? '✓' : s.status === 'final' ? '★' : i + 1}
+                        </span>
+                        <span className={`text-xs truncate ${s.status === 'completed' ? 'text-gray-400 line-through' : 'text-blue-900'}`}>{s.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -529,182 +557,121 @@ export function LiveFleetMapPage() {
               <Wifi className="w-4 h-4 text-blue-600" />
               <h3 className="text-sm font-semibold text-gray-900">{t('iot.liveData')}</h3>
             </div>
-
             {!isConnected && consecutiveFailures > 0 && (
               <div className="mb-3 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
-                <WifiOff className="w-4 h-4 flex-shrink-0" />
-                ⚠ {t('iot.lastKnown')}
+                <WifiOff className="w-4 h-4 flex-shrink-0" />⚠ {t('iot.lastKnown')}
               </div>
             )}
-
             {data ? (
               <div className="space-y-3">
                 <div className="text-center py-2">
                   <p className="text-4xl font-bold text-gray-900">{data.speed.toFixed(1)}</p>
                   <p className="text-xs text-gray-500 mt-0.5">km/h</p>
                 </div>
-                <div className={`flex items-center justify-between text-sm ${isRTL ? 'flex-row-reverse' : ''}`}>
-                  <span className="text-gray-600 flex items-center gap-1"><Gauge className="w-3.5 h-3.5" />{t('iot.motion')}</span>
-                  <span className="font-medium text-gray-900">{data.motion}</span>
-                </div>
-                <div className={`flex items-center justify-between text-sm ${isRTL ? 'flex-row-reverse' : ''}`}>
-                  <span className="text-gray-600 flex items-center gap-1"><Thermometer className="w-3.5 h-3.5" />{t('iot.temperature')}</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-medium">{data.temp.toFixed(1)}°C</span>
-                    <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${tempBadge(data.temp_status)}`}>{data.temp_status}</span>
+                {[
+                  { icon: Gauge, label: t('iot.motion'), value: data.motion },
+                  { icon: Thermometer, label: t('iot.temperature'), value: `${data.temp.toFixed(1)}°C`, badge: data.temp_status, badgeClass: tempBadge(data.temp_status) },
+                  { icon: Wind, label: t('iot.humidity'), value: `${data.humidity.toFixed(1)}%` },
+                  { icon: MapPin, label: t('iot.satellites'), value: `${data.gps_status} · ${data.satellites} sats` },
+                ].map(({ icon: Icon, label, value, badge, badgeClass }) => (
+                  <div key={label} className={`flex items-center justify-between text-sm ${isRTL ? 'flex-row-reverse' : ''}`}>
+                    <span className="text-gray-600 flex items-center gap-1"><Icon className="w-3.5 h-3.5" />{label}</span>
+                    <div className="flex items-center gap-1">
+                      <span className="font-medium text-gray-900">{value}</span>
+                      {badge && <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${badgeClass}`}>{badge}</span>}
+                    </div>
                   </div>
-                </div>
-                <div className={`flex items-center justify-between text-sm ${isRTL ? 'flex-row-reverse' : ''}`}>
-                  <span className="text-gray-600 flex items-center gap-1"><Wind className="w-3.5 h-3.5" />{t('iot.humidity')}</span>
-                  <span className="font-medium">{data.humidity.toFixed(1)}%</span>
-                </div>
-                <div className={`flex items-center justify-between text-sm ${isRTL ? 'flex-row-reverse' : ''}`}>
-                  <span className="text-gray-600 flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{t('iot.satellites')}</span>
-                  <span className="font-medium">{data.gps_status} · {data.satellites} sats</span>
-                </div>
-                <div className={`flex items-center justify-between text-sm ${isRTL ? 'flex-row-reverse' : ''}`}>
-                  <span className="text-gray-600">{t('iot.altitude')}</span>
-                  <span className="font-medium">{data.altitude.toFixed(1)} m</span>
-                </div>
-                {lastUpdated && (
-                  <p className="text-xs text-gray-400 text-center pt-1">{lastUpdated.toLocaleTimeString()}</p>
-                )}
+                ))}
+                {lastUpdated && <p className="text-xs text-gray-400 text-center pt-1">{lastUpdated.toLocaleTimeString()}</p>}
               </div>
             ) : (
-              <p className="text-sm text-gray-400 text-center py-6">Waiting for data...</p>
+              <p className="text-sm text-gray-400 text-center py-6">Device offline</p>
             )}
           </div>
 
-          {/* Fleet Vehicles */}
+          {/* Fleet list */}
           <div className="p-4 flex-1">
             <h3 className="text-sm font-semibold text-gray-900 mb-1">{t('home.fleetStatus')}</h3>
-            <p className="text-xs text-gray-400 mb-3">{t('fleet.clickVehicleHint')}</p>
-            {mockVehicles.length === 0 && !data && (
-              <div className="space-y-2" aria-hidden="true">
-                <Skeleton className="h-16 w-full" />
-                <Skeleton className="h-16 w-full" />
-                <Skeleton className="h-16 w-full" />
+            <p className="text-xs text-gray-400 mb-3">Click a vehicle to show its route only</p>
+            {routesLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-16 w-full" /><Skeleton className="h-16 w-full" /><Skeleton className="h-16 w-full" />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {fleetRoutes?.vehicles.map((v, idx) => {
+                  const driverName = DRIVER_NAMES[idx] ?? 'Driver';
+                  const isSelected = selectedVehicleId === v.id;
+                  const typeIcon = v.vehicle_type === 'EV'
+                    ? <Battery className="w-4 h-4 text-green-600 flex-shrink-0" />
+                    : <Truck className="w-4 h-4 text-gray-600 flex-shrink-0" />;
+                  const typeColor = v.vehicle_type === 'EV' ? 'bg-green-100 text-green-700'
+                    : v.vehicle_type === 'Hybrid' ? 'bg-purple-100 text-purple-700'
+                    : 'bg-gray-100 text-gray-600';
+
+                  return (
+                    <button key={v.id}
+                      onClick={() => v.idle ? undefined : selectVehicle(v.id)}
+                      disabled={v.idle}
+                      className={`w-full ${isRTL ? 'text-right' : 'text-left'} p-3 rounded-lg border transition-colors ${
+                        v.idle ? 'border-gray-100 bg-gray-50 opacity-60 cursor-default' :
+                        isSelected ? 'border-blue-500 bg-blue-50' :
+                        'border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+                      }`}>
+                      <div className={`flex items-center justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
+                        <div className={`flex items-center gap-2 min-w-0 ${isRTL ? 'flex-row-reverse' : ''}`}>
+                          {typeIcon}
+                          <span className="text-sm font-medium text-gray-900 truncate">{v.name}</span>
+                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${typeColor}`}>{v.vehicle_type}</span>
+                        </div>
+                        {isSelected && <span className="text-xs text-blue-600 font-semibold flex-shrink-0">● shown</span>}
+                        {v.idle && <span className="text-xs text-gray-400 flex-shrink-0">idle</span>}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5">{driverName}</p>
+                      {!v.idle && (
+                        <p className="text-xs text-green-600 font-medium mt-0.5">
+                          ● {t('fleet.onRoute')} · {v.stops.length} stops · {v.distance_km} km
+                        </p>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
-            <div className="space-y-2">
-
-              <button
-                onClick={() => data && selectVehicle('EV-02', data.lat, data.lon)}
-                aria-label="EV-02 live vehicle"
-                className={`w-full ${isRTL ? 'text-right' : 'text-left'} p-3 rounded-lg border transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
-                  selectedVehicleId === 'EV-02' ? 'border-blue-500 bg-blue-50' : 'border-blue-200 bg-blue-50/50 hover:border-blue-400'
-                }`}
-              >
-                <div className={`flex items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                  <Battery className="w-4 h-4 text-blue-600" />
-                  <span className="text-sm font-semibold text-gray-900 truncate" title="EV-02">EV-02</span>
-                  <span className="px-1.5 py-0.5 rounded text-xs font-bold bg-blue-600 text-white">● {t('iot.liveIndicator')}</span>
-                </div>
-                <p className="text-xs text-gray-500 mt-0.5">Mohammed Al-Saud</p>
-                {data && <p className="text-xs text-blue-600 mt-0.5">{data.speed.toFixed(1)} km/h · {data.motion}</p>}
-              </button>
-
-              {mockVehicles.filter(v => v.id !== 'V002').map(v => {
-                const isDelayed = v.status === 'delayed';
-                const matchedDisruption = disruptions.find(
-                  (d: Disruption) => d.vehicleId !== 'EV-02' && d.resolvedAt === null
-                );
-                const statusLabel = v.status === 'on-route' ? t('fleet.onRoute')
-                  : v.status === 'delayed' ? t('fleet.delayed') : t('fleet.idle');
-                return (
-                  <button
-                    key={v.id}
-                    onClick={() => selectVehicle(v.id, v.lat, v.lng)}
-                    aria-label={`${v.name} — ${statusLabel}`}
-                    className={`w-full ${isRTL ? 'text-right' : 'text-left'} p-3 rounded-lg border transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
-                      selectedVehicleId === v.id ? 'border-blue-500 bg-blue-50' :
-                      isDelayed ? 'border-red-200 bg-red-50 hover:border-red-400' :
-                      'border-gray-200 hover:bg-gray-50 hover:border-gray-300'
-                    }`}
-                  >
-                    <div className={`flex items-center justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
-                      <div className={`flex items-center gap-2 min-w-0 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                        {v.type === 'ev'
-                          ? <Battery className="w-4 h-4 text-green-600 flex-shrink-0" aria-hidden="true" />
-                          : <Truck className="w-4 h-4 text-gray-600 flex-shrink-0" aria-hidden="true" />}
-                        <span className="text-sm font-medium text-gray-900 truncate" title={v.name}>{v.name}</span>
-                        {isDelayed && (
-                          <span className="px-1.5 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700 flex-shrink-0">{t('fleet.disrupted')}</span>
-                        )}
-                      </div>
-                      {isDelayed && matchedDisruption && (
-                        <button
-                          onClick={e => { e.stopPropagation(); acknowledgeDisruption(matchedDisruption.id); }}
-                          aria-label={t('iot.resolve')}
-                          className="text-xs text-green-600 hover:text-green-700 font-medium flex items-center gap-1 transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5" />{t('iot.resolve')}
-                        </button>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-500 mt-0.5">{v.driverName}</p>
-                    <p className={`text-xs mt-0.5 font-medium ${
-                      v.status === 'on-route' ? 'text-green-600' :
-                      v.status === 'delayed' ? 'text-red-600' : 'text-gray-500'
-                    }`}>● {statusLabel}</p>
-                  </button>
-                );
-              })}
-            </div>
           </div>
         </div>
       </div>
 
       {/* DISRUPTION LOG */}
       <div className="bg-white border-t border-gray-200 flex-shrink-0">
-        <button
-          onClick={() => setLogOpen(o => !o)}
-          className={`w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition-colors ${isRTL ? 'flex-row-reverse' : ''}`}
-        >
+        <button onClick={() => setLogOpen(o => !o)}
+          className={`w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 ${isRTL ? 'flex-row-reverse' : ''}`}>
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-gray-900">{t('fleet.disruptionLog')}</span>
             {unresolvedDisruptions.length > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
-                {unresolvedDisruptions.length}
-              </span>
+              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">{unresolvedDisruptions.length}</span>
             )}
           </div>
           {logOpen ? <ChevronDown className="w-4 h-4 text-gray-500" /> : <ChevronUp className="w-4 h-4 text-gray-500" />}
         </button>
-
         {logOpen && (
           <div className="px-4 pb-3 max-h-48 overflow-y-auto">
             {disruptions.length === 0 ? (
-              <p className="text-sm text-green-600 py-2 flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4" /> ✓ {t('iot.noDisruptions')}
-              </p>
+              <p className="text-sm text-green-600 py-2 flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> ✓ {t('iot.noDisruptions')}</p>
             ) : (
               <div className="space-y-2">
                 {disruptions.map((d: Disruption) => (
                   <div key={d.id} className={`flex items-start gap-3 py-2 border-b border-gray-100 last:border-0 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                    <span className={`mt-0.5 px-2 py-0.5 rounded text-xs font-semibold flex-shrink-0 ${severityBadge(d.severity)}`}>
-                      {d.severity.toUpperCase()}
-                    </span>
+                    <span className={`mt-0.5 px-2 py-0.5 rounded text-xs font-semibold flex-shrink-0 ${severityBadge(d.severity)}`}>{d.severity.toUpperCase()}</span>
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-medium text-gray-900 ${d.resolvedAt ? 'line-through text-gray-400' : ''}`}>
-                        {formatDisruptionType(d.type)}
-                      </p>
+                      <p className={`text-sm font-medium text-gray-900 ${d.resolvedAt ? 'line-through text-gray-400' : ''}`}>{formatDisruptionType(d.type)}</p>
                       <p className="text-xs text-gray-500">{d.description}</p>
                       <p className="text-xs text-gray-400">{timeAgo(d.detectedAt)}</p>
                     </div>
                     <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                      {d.resolvedAt ? (
-                        <span className="text-xs text-green-600 font-medium">✓ Resolved</span>
-                      ) : (
-                        <>
-                          <span className="text-xs text-red-500 font-medium">● Active</span>
-                          <button
-                            onClick={() => acknowledgeDisruption(d.id)}
-                            className="text-xs text-gray-400 hover:text-green-600 underline"
-                          >
-                            {t('iot.resolve')}
-                          </button>
-                        </>
+                      {d.resolvedAt ? <span className="text-xs text-green-600 font-medium">✓ Resolved</span> : (
+                        <><span className="text-xs text-red-500 font-medium">● Active</span>
+                        <button onClick={() => acknowledgeDisruption(d.id)} className="text-xs text-gray-400 hover:text-green-600 underline">{t('iot.resolve')}</button></>
                       )}
                     </div>
                   </div>
