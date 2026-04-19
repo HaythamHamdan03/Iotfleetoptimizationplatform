@@ -1,7 +1,7 @@
 """
 Multi-Objective VRP Optimizer — Flask API
 Run:  python optimizer_api.py
-Deps: pip install flask flask-cors pulp numpy
+Deps: pip install flask flask-cors pulp numpy pymongo python-dotenv
 """
 
 from flask import Flask, request, jsonify
@@ -10,6 +10,9 @@ import pulp
 import numpy as np
 import math, time, warnings
 from dataclasses import dataclass
+from datetime import datetime, timezone
+
+from db import areas_col, vehicles_col, depot_col, config_col, runs_col
 
 warnings.filterwarnings("ignore")
 
@@ -50,10 +53,50 @@ class OptimizationConfig:
     w_cost: float = 0.5
     w_co2: float = 0.3
     w_fairness: float = 0.2
-    time_limit_seconds: int = 60
-    solver_gap: float = 0.25
+    time_limit_seconds: int | None = None  # None = no limit, run to optimal
+    solver_gap: float = 0.0               # 0 = find true optimal, no early exit
     cost_reduction_target: float = 0.15
     co2_reduction_target: float = 0.10
+
+
+# ── MONGO LOADERS ──────────────────────────────────────────────────────────────
+
+def load_areas():
+    """Returns list of area dicts from MongoDB."""
+    return list(areas_col().find({}, {"_id": 0}))
+
+
+def load_vehicle_specs():
+    """Returns list of active vehicle spec dicts from MongoDB."""
+    return list(vehicles_col().find({"active": True}, {"_id": 0}))
+
+
+def load_depot():
+    """Returns the depot document from MongoDB."""
+    doc = depot_col().find_one({}, {"_id": 0})
+    if doc is None:
+        raise RuntimeError("No depot found in MongoDB. Run seed_db.py first.")
+    return doc
+
+
+def load_default_config() -> OptimizationConfig:
+    """Returns solver defaults from MongoDB (falls back to hardcoded if missing)."""
+    doc = config_col().find_one({}, {"_id": 0}) or {}
+    return OptimizationConfig(
+        w_cost=doc.get("w_cost", 0.5),
+        w_co2=doc.get("w_co2", 0.3),
+        w_fairness=doc.get("w_fairness", 0.2),
+        time_limit_seconds=doc.get("time_limit_seconds", 60),
+        solver_gap=doc.get("solver_gap", 0.25),
+        cost_reduction_target=doc.get("cost_reduction_target", 0.15),
+        co2_reduction_target=doc.get("co2_reduction_target", 0.10),
+    )
+
+
+def save_run(payload: dict):
+    """Saves a completed optimization run to MongoDB."""
+    payload["timestamp"] = datetime.now(timezone.utc)
+    runs_col().insert_one(payload)
 
 
 # ── UTILITIES ──────────────────────────────────────────────────────────────────
@@ -100,68 +143,52 @@ def to_json_safe(obj):
 
 # ── DATA GENERATOR ─────────────────────────────────────────────────────────────
 
-RIYADH_AREAS = [
-    ("Al Olaya",            24.6900, 46.6850),
-    ("Al Malaz",            24.6650, 46.7200),
-    ("Al Murabba",          24.6500, 46.7100),
-    ("Sulaimaniyah",        24.6950, 46.6600),
-    ("Al Wurud",            24.6800, 46.6900),
-    ("Al Rawdah",           24.7300, 46.7200),
-    ("Al Nakheel",          24.7650, 46.6350),
-    ("Al Sahafah",          24.7900, 46.6500),
-    ("Al Yasmin",           24.8100, 46.6200),
-    ("Al Narjis",           24.8300, 46.6100),
-    ("Al Suwaidi",          24.6100, 46.6400),
-    ("Al Shifa",            24.5800, 46.7000),
-    ("Al Aziziyah",         24.6300, 46.7800),
-    ("King Fahd District",  24.7100, 46.7500),
-    ("Al Hamra",            24.7400, 46.6100),
-    ("Al Rabwah",           24.6700, 46.7400),
-    ("Hittin",              24.7700, 46.6000),
-    ("Al Mursalat",         24.7200, 46.6400),
-    ("Tuwaiq",              24.6250, 46.5900),
-    ("Al Khaleej",          24.7050, 46.7600),
-]
-
-VEHICLE_SPECS = [
-    ("Truck-ICE-1", "ICE",    500, 1.80, 0.27, 400),
-    ("Truck-ICE-2", "ICE",    500, 1.80, 0.27, 400),
-    ("Van-ICE-1",   "ICE",    500, 1.20, 0.18, 350),
-    ("Van-EV-1",    "EV",     200, 0.60, 0.02, 150),
-    ("Van-EV-2",    "EV",     200, 0.60, 0.02, 150),
-    ("Van-Hybrid-1","Hybrid", 300, 0.90, 0.09, 250),
-    ("Pickup-ICE-1","ICE",    500, 1.00, 0.15, 300),
-]
-
-
-def generate_dummy_data(n_customers=15, n_vehicles=5, seed=42):
+def generate_data(n_customers=15, n_vehicles=5, seed=42):
+    """Builds Location and Vehicle lists using data from MongoDB."""
     rng = np.random.RandomState(seed)
-    depot = Location(id=0, name="Depot (Riyadh Warehouse)",
-                     lat=24.7136, lon=46.6753,
-                     time_window_start=300, time_window_end=1380)
+
+    depot_doc = load_depot()
+    depot = Location(
+        id=0,
+        name=depot_doc["name"],
+        lat=depot_doc["lat"],
+        lon=depot_doc["lon"],
+        time_window_start=depot_doc.get("time_window_start", 300),
+        time_window_end=depot_doc.get("time_window_end", 1380),
+    )
+
+    areas = load_areas()
     locations = [depot]
     for i in range(n_customers):
-        area = RIYADH_AREAS[i % len(RIYADH_AREAS)]
+        area = areas[i % len(areas)]
         locations.append(Location(
             id=i + 1,
-            name=f"Customer {i+1} ({area[0]})",
-            lat=float(area[1] + rng.normal(0, 0.003)),
-            lon=float(area[2] + rng.normal(0, 0.003)),
+            name=f"Customer {i+1} ({area['name']})",
+            lat=float(area["lat"] + rng.normal(0, 0.003)),
+            lon=float(area["lon"] + rng.normal(0, 0.003)),
             demand=round(float(rng.uniform(10, 120)), 1),
             service_time=round(float(rng.uniform(5, 12)), 1),
             time_window_start=float(rng.choice([360, 420, 480])),
             time_window_end=float(rng.choice([1140, 1200, 1260, 1320])),
             priority=int(rng.choice([1, 2, 3], p=[0.6, 0.25, 0.15]))
         ))
+
+    specs = load_vehicle_specs()
     vehicles = []
     for i in range(n_vehicles):
-        spec = VEHICLE_SPECS[i % len(VEHICLE_SPECS)]
+        spec = specs[i % len(specs)]
         vehicles.append(Vehicle(
-            id=i, name=spec[0], vehicle_type=spec[1],
-            capacity=spec[2], cost_per_km=spec[3],
-            co2_per_km=spec[4], max_range=spec[5],
-            speed_kmh=round(float(rng.uniform(35, 50)), 1)
+            id=i,
+            name=spec["name"],
+            vehicle_type=spec["vehicle_type"],
+            capacity=spec["capacity"],
+            cost_per_km=spec["cost_per_km"],
+            co2_per_km=spec["co2_per_km"],
+            max_range=spec["max_range"],
+            max_shift_hours=spec.get("max_shift_hours", 8.0),
+            speed_kmh=round(float(rng.uniform(35, 50)), 1),
         ))
+
     return locations, vehicles
 
 
@@ -311,7 +338,10 @@ class FleetOptimizer:
             prob += L_max >= L[k]
             prob += L_min <= L[k] + M * (1 - y[k])
 
-        solver = pulp.PULP_CBC_CMD(timeLimit=tl, gapRel=self.config.solver_gap, msg=0)
+        solver_kwargs = {"gapRel": self.config.solver_gap, "msg": 0}
+        if tl is not None:
+            solver_kwargs["timeLimit"] = tl
+        solver = pulp.PULP_CBC_CMD(**solver_kwargs)
         prob.solve(solver)
         elapsed = time.time() - t0
         status = pulp.LpStatus[prob.status]
@@ -409,15 +439,22 @@ def optimize():
     w_cost      = float(body.get('w_cost',    0.5))
     w_co2       = float(body.get('w_co2',     0.3))
     w_fairness  = float(body.get('w_fairness', 0.2))
-    time_limit  = max(30, min(int(body.get('time_limit', 60)), 120))
+    raw_tl      = body.get('time_limit')
+    time_limit  = int(raw_tl) if raw_tl is not None else None  # None = no limit
     seed        = int(body.get('seed', 42))
 
-    locations, vehicles = generate_dummy_data(n_customers, n_vehicles, seed=seed)
+    locations, vehicles = generate_data(n_customers, n_vehicles, seed=seed)
     dist_matrix = build_distance_matrix(locations)
     baseline = solve_baseline(locations, vehicles, dist_matrix)
 
-    config = OptimizationConfig(w_cost=w_cost, w_co2=w_co2, w_fairness=w_fairness,
-                                 time_limit_seconds=time_limit)
+    default_cfg = load_default_config()
+    config = OptimizationConfig(
+        w_cost=w_cost, w_co2=w_co2, w_fairness=w_fairness,
+        time_limit_seconds=time_limit,
+        solver_gap=default_cfg.solver_gap,
+        cost_reduction_target=default_cfg.cost_reduction_target,
+        co2_reduction_target=default_cfg.co2_reduction_target,
+    )
     optimizer = FleetOptimizer(locations, vehicles, config)
     result = optimizer.solve()
 
@@ -425,17 +462,49 @@ def optimize():
         return jsonify({'status': 'error', 'message': result.get('error', 'Solver failed')}), 500
 
     comparison = optimizer.compare(baseline, result)
-    return jsonify(to_json_safe({
-        'status': 'success',
+
+    response = to_json_safe({
+        'status':      'success',
         'n_customers': n_customers,
-        'n_vehicles': n_vehicles,
-        'baseline': baseline,
-        'optimized': result,
-        'comparison': comparison,
-    }))
+        'n_vehicles':  n_vehicles,
+        'baseline':    baseline,
+        'optimized':   result,
+        'comparison':  comparison,
+    })
+
+    # Persist this run to MongoDB (fire-and-forget — don't block the response)
+    try:
+        save_run({
+            "n_customers": n_customers,
+            "n_vehicles":  n_vehicles,
+            "weights":     {"cost": w_cost, "co2": w_co2, "fairness": w_fairness},
+            "seed":        seed,
+            "baseline":    baseline,
+            "optimized":   result,
+            "comparison":  comparison,
+        })
+    except Exception:
+        pass  # never fail the API response because of a DB write error
+
+    return jsonify(response)
+
+
+@app.route('/runs', methods=['GET'])
+def list_runs():
+    """Returns the 20 most recent optimization runs from MongoDB."""
+    docs = list(
+        runs_col()
+        .find({}, {"_id": 0})
+        .sort("timestamp", -1)
+        .limit(20)
+    )
+    for d in docs:
+        if "timestamp" in d:
+            d["timestamp"] = d["timestamp"].isoformat()
+    return jsonify(docs)
 
 
 if __name__ == '__main__':
     print("VRP Optimizer API — http://localhost:5001")
-    print("Install:  pip install flask flask-cors pulp numpy")
+    print("Install:  pip install flask flask-cors pulp numpy pymongo python-dotenv")
     app.run(host='0.0.0.0', port=5001, debug=False)

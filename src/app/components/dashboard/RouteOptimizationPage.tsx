@@ -115,7 +115,6 @@ export function RouteOptimizationPage() {
           n_customers: nCustomers,
           n_vehicles: nVehicles,
           ...WEIGHTS[objective],
-          time_limit: 60,
           seed: 42,
         }),
       });
@@ -195,7 +194,7 @@ export function RouteOptimizationPage() {
                 <span className="text-sm text-gray-600">Vehicles</span>
                 <Counter value={nVehicles} onChange={setNVehicles} min={2} max={8} />
               </div>
-              <p className="text-xs text-gray-400 pt-1">Solver limit: 60 s · up to 15 customers</p>
+              <p className="text-xs text-gray-400 pt-1">No time limit · up to 15 customers</p>
             </div>
 
             <Button
@@ -240,7 +239,7 @@ export function RouteOptimizationPage() {
               <div className="w-14 h-14 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
               <div className="text-center">
                 <p className="text-lg font-medium text-gray-900">Running MILP Optimizer…</p>
-                <p className="text-sm text-gray-500 mt-1">Elapsed: {elapsedSec}s · Solve limit: 60s</p>
+                <p className="text-sm text-gray-500 mt-1">Elapsed: {elapsedSec}s · No time limit</p>
                 <p className="text-xs text-gray-400 mt-2">{nCustomers} customers · {nVehicles} vehicles</p>
               </div>
             </div>
