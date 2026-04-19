@@ -22,6 +22,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/optimizer/, ''),
       },
+      '/iot-device': {
+        target: 'http://172.20.10.6',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/iot-device/, ''),
+      },
     },
   },
   resolve: {
