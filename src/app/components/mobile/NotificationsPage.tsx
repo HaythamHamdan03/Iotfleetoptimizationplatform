@@ -1,7 +1,7 @@
 import React from 'react';
 import { toast } from 'sonner';
 import { Bell, Navigation, AlertCircle, MessageSquare, Clock, BellOff } from 'lucide-react';
-import { mockNotifications } from '@/app/data/mockData';
+import { mockNotifications } from '@/app/fixtures/mockData';
 import { useLanguage } from '@/app/i18n/LanguageContext';
 import { Button } from '@/app/components/ui/button';
 import { EmptyState } from '@/app/components/ui/EmptyState';

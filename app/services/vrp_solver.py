@@ -1,85 +1,27 @@
-"""
-Multi-Objective VRP Optimizer — Flask API
-Run:  python optimizer_api.py
-Deps: pip install flask flask-cors pulp numpy pymongo python-dotenv requests
-"""
+"""Pure VRP optimization logic (OR-tools / PuLP). No Flask imports."""
 
-import os
-import logging
-
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-import pulp
-import numpy as np
-import math, time, warnings
-import requests
-from dataclasses import dataclass
+import math
+import time
 from datetime import datetime, timezone
-from dotenv import load_dotenv
 
+import numpy as np
+import pulp
+
+from app.models.schemas import Location, Vehicle, OptimizationConfig
 from db import areas_col, vehicles_col, depot_col, config_col, runs_col
-
-load_dotenv()
-
-warnings.filterwarnings("ignore")
-
-app = Flask(__name__)
-CORS(app)
-
-
-# ── DATA STRUCTURES ────────────────────────────────────────────────────────────
-
-@dataclass
-class Location:
-    id: int
-    name: str
-    lat: float
-    lon: float
-    demand: float = 0.0
-    service_time: float = 0.0
-    time_window_start: float = 0.0
-    time_window_end: float = 1440.0
-    priority: int = 1
-
-
-@dataclass
-class Vehicle:
-    id: int
-    name: str
-    vehicle_type: str
-    capacity: float
-    cost_per_km: float
-    co2_per_km: float
-    max_range: float
-    max_shift_hours: float = 8.0
-    speed_kmh: float = 40.0
-
-
-@dataclass
-class OptimizationConfig:
-    w_cost: float = 0.5
-    w_co2: float = 0.3
-    w_fairness: float = 0.2
-    time_limit_seconds: int | None = None  # None = no limit, run to optimal
-    solver_gap: float = 0.0               # 0 = find true optimal, no early exit
-    cost_reduction_target: float = 0.15
-    co2_reduction_target: float = 0.10
 
 
 # ── MONGO LOADERS ──────────────────────────────────────────────────────────────
 
 def load_areas():
-    """Returns list of area dicts from MongoDB."""
     return list(areas_col().find({}, {"_id": 0}))
 
 
 def load_vehicle_specs():
-    """Returns list of active vehicle spec dicts from MongoDB."""
     return list(vehicles_col().find({"active": True}, {"_id": 0}))
 
 
 def load_depot():
-    """Returns the depot document from MongoDB."""
     doc = depot_col().find_one({}, {"_id": 0})
     if doc is None:
         raise RuntimeError("No depot found in MongoDB. Run seed_db.py first.")
@@ -87,7 +29,6 @@ def load_depot():
 
 
 def load_default_config() -> OptimizationConfig:
-    """Returns solver defaults from MongoDB (falls back to hardcoded if missing)."""
     doc = config_col().find_one({}, {"_id": 0}) or {}
     return OptimizationConfig(
         w_cost=doc.get("w_cost", 0.5),
@@ -101,9 +42,12 @@ def load_default_config() -> OptimizationConfig:
 
 
 def save_run(payload: dict):
-    """Saves a completed optimization run to MongoDB."""
     payload["timestamp"] = datetime.now(timezone.utc)
     runs_col().insert_one(payload)
+
+
+def latest_run():
+    return runs_col().find_one({}, sort=[("timestamp", -1)])
 
 
 # ── UTILITIES ──────────────────────────────────────────────────────────────────
@@ -113,7 +57,7 @@ def haversine_km(lat1, lon1, lat2, lon2):
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
     dphi = math.radians(lat2 - lat1)
     dlam = math.radians(lon2 - lon1)
-    a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlam/2)**2
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2
     return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
@@ -134,7 +78,6 @@ def build_time_matrix(dist_matrix, speed_kmh=40.0):
 
 
 def to_json_safe(obj):
-    """Recursively convert numpy types to Python natives for jsonify."""
     if isinstance(obj, dict):
         return {k: to_json_safe(v) for k, v in obj.items()}
     if isinstance(obj, list):
@@ -151,7 +94,6 @@ def to_json_safe(obj):
 # ── DATA GENERATOR ─────────────────────────────────────────────────────────────
 
 def generate_data(n_customers=15, n_vehicles=5, seed=42):
-    """Builds Location and Vehicle lists using data from MongoDB."""
     rng = np.random.RandomState(seed)
 
     depot_doc = load_depot()
@@ -431,88 +373,17 @@ class FleetOptimizer:
         }
 
 
-# ── FLASK ENDPOINTS ────────────────────────────────────────────────────────────
+# ── FLEET ROUTES HELPER ───────────────────────────────────────────────────────
 
-@app.route('/health', methods=['GET'])
-def health():
-    return jsonify({'status': 'ok', 'solver': 'PuLP/CBC'})
-
-
-@app.route('/optimize', methods=['POST'])
-def optimize():
-    body = request.json or {}
-    n_customers = max(5,  min(int(body.get('n_customers', 10)), 15))
-    n_vehicles  = max(2,  min(int(body.get('n_vehicles',   5)),  8))
-    w_cost      = float(body.get('w_cost',    0.5))
-    w_co2       = float(body.get('w_co2',     0.3))
-    w_fairness  = float(body.get('w_fairness', 0.2))
-    raw_tl      = body.get('time_limit')
-    time_limit  = int(raw_tl) if raw_tl is not None else None  # None = no limit
-    seed        = int(body.get('seed', 42))
-
-    locations, vehicles = generate_data(n_customers, n_vehicles, seed=seed)
-    dist_matrix = build_distance_matrix(locations)
-    baseline = solve_baseline(locations, vehicles, dist_matrix)
-
-    default_cfg = load_default_config()
-    config = OptimizationConfig(
-        w_cost=w_cost, w_co2=w_co2, w_fairness=w_fairness,
-        time_limit_seconds=time_limit,
-        solver_gap=default_cfg.solver_gap,
-        cost_reduction_target=default_cfg.cost_reduction_target,
-        co2_reduction_target=default_cfg.co2_reduction_target,
-    )
-    optimizer = FleetOptimizer(locations, vehicles, config)
-    result = optimizer.solve()
-
-    if result.get('status') not in ('Optimal', 'Feasible'):
-        return jsonify({'status': 'error', 'message': result.get('error', 'Solver failed')}), 500
-
-    comparison = optimizer.compare(baseline, result)
-
-    response = to_json_safe({
-        'status':      'success',
-        'n_customers': n_customers,
-        'n_vehicles':  n_vehicles,
-        'baseline':    baseline,
-        'optimized':   result,
-        'comparison':  comparison,
-    })
-
-    # Persist this run to MongoDB (fire-and-forget — don't block the response)
-    try:
-        save_run({
-            "n_customers": n_customers,
-            "n_vehicles":  n_vehicles,
-            "weights":     {"cost": w_cost, "co2": w_co2, "fairness": w_fairness},
-            "seed":        seed,
-            "baseline":    baseline,
-            "optimized":   result,
-            "comparison":  comparison,
-        })
-    except Exception:
-        pass  # never fail the API response because of a DB write error
-
-    return jsonify(response)
-
-
-@app.route('/fleet-routes', methods=['GET'])
-def fleet_routes():
-    """
-    Returns all DB vehicles with enriched route data for the Live Fleet map.
-    Always uses all 7 vehicles from MongoDB with 15 customers (seed=42) so
-    every vehicle gets a route. Uses the latest optimized run if one exists.
-    Stop statuses: first stop = completed, second = current, rest = upcoming,
-    last = final.
-    """
+def build_fleet_routes_payload():
+    """Returns depot + vehicle stop data for the Live Fleet map."""
     specs = load_vehicle_specs()
-    n_veh = len(specs)   # all vehicles in the DB (7)
+    n_veh = len(specs)
     n_cust = 15
     seed = 42
     source = 'baseline'
 
-    # Use latest optimized run if available (prefer its customer count/seed)
-    run = runs_col().find_one({}, sort=[("timestamp", -1)])
+    run = latest_run()
     if run:
         n_cust = max(n_cust, run.get('n_customers', 15))
         seed = run.get('seed', 42)
@@ -552,7 +423,6 @@ def fleet_routes():
             })
         return result
 
-    # Build output for vehicles that received a route
     vehicles_out = []
     routed_names = set()
     for k, r in raw_routes.items():
@@ -570,7 +440,6 @@ def fleet_routes():
         })
         routed_names.add(r['vehicle'])
 
-    # Add idle vehicles (in DB but not assigned a route this run)
     for spec in specs:
         if spec['name'] not in routed_names:
             vehicles_out.append({
@@ -585,98 +454,76 @@ def fleet_routes():
                 'idle':         True,
             })
 
-    return jsonify(to_json_safe({
+    return {
         'depot':    {'name': depot.name, 'lat': depot.lat, 'lon': depot.lon},
         'vehicles': vehicles_out,
         'source':   source,
-    }))
+    }
 
 
-@app.route('/runs', methods=['GET'])
-def list_runs():
-    """Returns the 20 most recent optimization runs from MongoDB."""
+def list_recent_runs(limit=20):
     docs = list(
         runs_col()
         .find({}, {"_id": 0})
         .sort("timestamp", -1)
-        .limit(20)
+        .limit(limit)
     )
     for d in docs:
         if "timestamp" in d:
             d["timestamp"] = d["timestamp"].isoformat()
-    return jsonify(docs)
+    return docs
 
 
-# ── HERE GEOCODING PROXY ──────────────────────────────────────────────────────
-# Server-side proxy to the HERE Geocoding API. Keeps HERE_API_KEY off the client.
-# Accepts full KSA addresses or Saudi short addresses (e.g. "RCTB4359").
+def run_optimization(params: dict) -> tuple[dict | None, dict | None]:
+    """Run baseline + MILP optimization. Returns (response_dict, error_dict)."""
+    n_customers = params["n_customers"]
+    n_vehicles = params["n_vehicles"]
+    w_cost = params["w_cost"]
+    w_co2 = params["w_co2"]
+    w_fairness = params["w_fairness"]
+    time_limit = params["time_limit"]
+    seed = params["seed"]
 
-HERE_GEOCODE_URL = "https://geocode.search.hereapi.com/v1/geocode"
-_geocode_log = logging.getLogger("geocode")
+    locations, vehicles = generate_data(n_customers, n_vehicles, seed=seed)
+    dist_matrix = build_distance_matrix(locations)
+    baseline = solve_baseline(locations, vehicles, dist_matrix)
 
-
-def _here_request(query: str, api_key: str, timeout: float = 5.0):
-    return requests.get(
-        HERE_GEOCODE_URL,
-        params={"q": query, "apiKey": api_key, "in": "countryCode:SAU"},
-        timeout=timeout,
+    default_cfg = load_default_config()
+    config = OptimizationConfig(
+        w_cost=w_cost, w_co2=w_co2, w_fairness=w_fairness,
+        time_limit_seconds=time_limit,
+        solver_gap=default_cfg.solver_gap,
+        cost_reduction_target=default_cfg.cost_reduction_target,
+        co2_reduction_target=default_cfg.co2_reduction_target,
     )
+    optimizer = FleetOptimizer(locations, vehicles, config)
+    result = optimizer.solve()
 
+    if result.get('status') not in ('Optimal', 'Feasible'):
+        return None, {'status': 'error', 'message': result.get('error', 'Solver failed')}
 
-@app.route('/geocode', methods=['GET'])
-@app.route('/api/geocode', methods=['GET'])
-def geocode():
-    query = (request.args.get('q') or '').strip()
-    if not query:
-        return jsonify({'error': 'empty_query'}), 400
+    comparison = optimizer.compare(baseline, result)
 
-    api_key = os.environ.get('HERE_API_KEY', '').strip()
-    if not api_key:
-        return jsonify({'error': 'missing_api_key'}), 500
+    response = to_json_safe({
+        'status':      'success',
+        'n_customers': n_customers,
+        'n_vehicles':  n_vehicles,
+        'baseline':    baseline,
+        'optimized':   result,
+        'comparison':  comparison,
+    })
 
-    # One retry on transient failure (timeout / 5xx / connection error).
-    last_err = None
-    for attempt in range(2):
-        try:
-            res = _here_request(query, api_key)
-            if res.status_code >= 500:
-                last_err = f'here_status_{res.status_code}'
-                continue
-            if res.status_code != 200:
-                _geocode_log.warning("HERE returned %s for query=%r", res.status_code, query)
-                return jsonify({'error': f'here_status_{res.status_code}'}), 502
-            data = res.json()
-            items = data.get('items') or []
-            if not items:
-                return jsonify({'error': 'address_not_found'}), 404
+    try:
+        save_run({
+            "n_customers": n_customers,
+            "n_vehicles":  n_vehicles,
+            "weights":     {"cost": w_cost, "co2": w_co2, "fairness": w_fairness},
+            "seed":        seed,
+            "baseline":    baseline,
+            "optimized":   result,
+            "comparison":  comparison,
+        })
+    except Exception:
+        pass
 
-            it = items[0]
-            pos = it.get('position') or {}
-            addr = it.get('address') or {}
-            return jsonify({
-                'title':            it.get('title'),
-                'formatted_address': addr.get('label'),
-                'latitude':         pos.get('lat'),
-                'longitude':        pos.get('lng'),
-                'country_code':     addr.get('countryCode'),
-                'city':             addr.get('city'),
-                'district':         addr.get('district'),
-                'street':           addr.get('street'),
-                'house_number':     addr.get('houseNumber'),
-                'postal_code':      addr.get('postalCode'),
-                'result_type':      it.get('resultType'),
-                'query_score':      (it.get('scoring') or {}).get('queryScore'),
-                'raw_response':     it,
-            })
-        except (requests.Timeout, requests.ConnectionError) as e:
-            last_err = type(e).__name__
-            continue
-
-    _geocode_log.warning("HERE geocoding failed for query=%r: %s", query, last_err)
-    return jsonify({'error': 'upstream_unavailable', 'detail': last_err}), 504
-
-
-if __name__ == '__main__':
-    print("VRP Optimizer API — http://localhost:5001")
-    print("Install:  pip install flask flask-cors pulp numpy pymongo python-dotenv requests")
-    app.run(host='0.0.0.0', port=5001, debug=False)
+    return response, None

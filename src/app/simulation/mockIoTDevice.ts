@@ -1,16 +1,5 @@
-export interface IoTPayload {
-  temp: number;
-  humidity: number;
-  temp_status: 'NORMAL' | 'WARM' | 'TOO HOT';
-  motion: 'STOPPED' | 'ACCELERATING' | 'DECELERATING' | 'STEADY';
-  gps_status: string;
-  lat: number;
-  lon: number;
-  altitude: number;
-  speed: number;
-  satellites: number;
-  gps_fix: boolean;
-}
+import type { IoTPayload } from '@/app/types/iot';
+export type { IoTPayload };
 
 // SPL Central Post Office — depot / origin for the active driver (Dammam).
 const BASE_LAT = 26.4352;

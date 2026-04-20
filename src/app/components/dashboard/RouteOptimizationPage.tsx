@@ -6,56 +6,8 @@ import {
 import { useLanguage } from '@/app/i18n/LanguageContext';
 import { Button } from '@/app/components/ui/button';
 import { toast } from 'sonner';
-
-// ── Types matching optimizer_api.py response ──────────────────────────────────
-
-interface RouteEntry {
-  vehicle: string;
-  vehicle_type: string;
-  route: number[];
-  route_names: string[];
-  distance_km: number;
-  cost_sar: number;
-  co2_kg: number;
-  load_kg: number;
-  capacity_util: number;
-}
-
-interface ApiResult {
-  status: 'success';
-  n_customers: number;
-  n_vehicles: number;
-  baseline: {
-    total_cost_sar: number;
-    total_co2_kg: number;
-    vehicles_used: number;
-    workload_balance: number;
-  };
-  optimized: {
-    total_cost_sar: number;
-    total_co2_kg: number;
-    total_distance_km: number;
-    vehicles_used: number;
-    fleet_utilization: number;
-    workload_balance: number;
-    status: string;
-    solve_time_s: number;
-    routes: Record<string, RouteEntry>;
-  };
-  comparison: {
-    cost_reduction_pct: number;
-    co2_reduction_pct: number;
-    vehicles_baseline: number;
-    vehicles_optimized: number;
-    workload_baseline: number;
-    workload_optimized: number;
-    spec1_met: boolean;
-    spec3_met: boolean;
-    spec2_met: boolean;
-  };
-}
-
-const OPTIMIZER_URL = '/optimizer';
+import type { OptimizeApiResult } from '@/app/types/api';
+import { optimizeRoute } from '@/app/services/api';
 
 const WEIGHTS = {
   cost:     { w_cost: 0.7, w_co2: 0.2, w_fairness: 0.1 },
@@ -98,7 +50,7 @@ export function RouteOptimizationPage() {
   const [isOptimizing, setIsOptimizing] = React.useState(false);
   const [nCustomers, setNCustomers] = React.useState(10);
   const [nVehicles, setNVehicles] = React.useState(5);
-  const [apiResult, setApiResult] = React.useState<ApiResult | null>(null);
+  const [apiResult, setApiResult] = React.useState<OptimizeApiResult | null>(null);
   const [elapsedSec, setElapsedSec] = React.useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -108,21 +60,12 @@ export function RouteOptimizationPage() {
     timerRef.current = setInterval(() => setElapsedSec(s => s + 1), 1000);
 
     try {
-      const res = await fetch(`${OPTIMIZER_URL}/optimize`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          n_customers: nCustomers,
-          n_vehicles: nVehicles,
-          ...WEIGHTS[objective],
-          seed: 42,
-        }),
+      const data = await optimizeRoute({
+        n_customers: nCustomers,
+        n_vehicles: nVehicles,
+        ...WEIGHTS[objective],
+        seed: 42,
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: `HTTP ${res.status}` }));
-        throw new Error(err.message ?? `HTTP ${res.status}`);
-      }
-      const data: ApiResult = await res.json();
       setApiResult(data);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

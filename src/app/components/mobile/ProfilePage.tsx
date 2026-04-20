@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { User, Award, TrendingUp, Package, Clock, Star, Scale, Settings, LogOut, ChevronRight, Globe } from 'lucide-react';
-import { mockDriverPerformance } from '@/app/data/mockData';
+import { mockDriverPerformance } from '@/app/fixtures/mockData';
 import { useLanguage, type Language } from '@/app/i18n/LanguageContext';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter, SheetClose } from '@/app/components/ui/sheet';
 import { Button } from '@/app/components/ui/button';

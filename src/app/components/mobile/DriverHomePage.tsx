@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapPin, Clock, Package, TrendingUp, CheckCircle2 } from 'lucide-react';
-import { mockDeliveryStops } from '@/app/data/mockData';
+import { mockDeliveryStops } from '@/app/fixtures/mockData';
 import { useLanguage } from '@/app/i18n/LanguageContext';
 
 interface DriverHomePageProps {

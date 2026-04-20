@@ -1,25 +1,15 @@
-// Fetches a driving route that follows actual streets using OSRM's public API.
-// Input: an ordered list of [lat, lng] waypoints.
-// Output: a dense polyline of [lat, lng] points that snaps to roads.
+// Street-snapping + polyline helpers on top of the OSRM service.
 // Falls back to the original straight-line waypoints on any error.
 
-export type LatLng = [number, number];
+import { fetchOSRMRoute, type LatLng } from '@/app/services/api';
 
-const OSRM_BASE = 'https://router.project-osrm.org/route/v1/driving';
+export type { LatLng };
 
 export async function fetchStreetRoute(points: LatLng[]): Promise<LatLng[]> {
   if (points.length < 2) return points;
-
-  const coords = points.map(([lat, lng]) => `${lng},${lat}`).join(';');
-  const url = `${OSRM_BASE}/${coords}?overview=full&geometries=geojson`;
-
   try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`OSRM ${res.status}`);
-    const data = await res.json();
-    const geo = data?.routes?.[0]?.geometry?.coordinates;
-    if (!Array.isArray(geo) || geo.length === 0) return points;
-    return geo.map(([lng, lat]: [number, number]) => [lat, lng] as LatLng);
+    const path = await fetchOSRMRoute(points);
+    return path ?? points;
   } catch (err) {
     console.warn('[streetRouting] OSRM failed, using straight line:', err);
     return points;

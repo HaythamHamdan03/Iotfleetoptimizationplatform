@@ -1,60 +1,13 @@
-// Mock data for the Fleet Management System
+// Mock data — not used in production builds.
 
-export interface Vehicle {
-  id: string;
-  name: string;
-  type: 'truck' | 'ev' | 'drone';
-  status: 'on-route' | 'delayed' | 'idle';
-  lat: number;
-  lng: number;
-  driverId: string;
-  driverName: string;
-  batteryLevel?: number;
-  fuelLevel?: number;
-  currentLoad: number;
-  maxLoad: number;
-  routeStopIds: string[];
-}
-
-export type DeliveryStopType =
-  | 'depot'
-  | 'residential'
-  | 'commercial'
-  | 'office'
-  | 'industrial'
-  | 'landmark';
-
-export interface DeliveryStop {
-  id: string;
-  name: string;
-  nameAr: string;
-  address: string;
-  lat: number;
-  lng: number;
-  status: 'pending' | 'completed' | 'current';
-  type: DeliveryStopType;
-  scheduledTime: string;
-  actualTime: string | null;
-  estimatedTime?: string;
-  packageCount?: number;
-}
-
-export interface Route {
-  id: string;
-  vehicleId: string;
-  driverId: string;
-  stops: DeliveryStop[];
-  totalDistance: number;
-  estimatedDuration: number;
-  status: 'active' | 'completed' | 'planned';
-}
-
-export interface KPIData {
-  totalCost: number;
-  co2Emissions: number;
-  fleetUtilization: number;
-  workloadFairness: number;
-}
+import type {
+  Vehicle,
+  DeliveryStop,
+  KPIData,
+  OptimizationResult,
+  Notification,
+  DriverPerformance,
+} from '@/app/types/fleet';
 
 // Mock Vehicles — positioned near their first assigned delivery stop in Dammam, KSA.
 // Each vehicle carries a `routeStopIds` list (distinct across vehicles); the last
@@ -183,24 +136,12 @@ export const mockDeliveryStops: DeliveryStop[] = [
   { id: 'S020', name: 'IAU East Campus', nameAr: 'جامعة الإمام عبدالرحمن — الحرم الشرقي', address: 'Rakkah, Dammam 34221', lat: 26.3979, lng: 50.1982, status: 'pending', scheduledTime: '15:45', actualTime: null, type: 'landmark' },
 ];
 
-// Mock KPI Data
 export const mockKPIData: KPIData = {
   totalCost: 45280,
   co2Emissions: 2847,
   fleetUtilization: 73,
   workloadFairness: 0.82,
 };
-
-// Mock Optimization Results
-export interface OptimizationResult {
-  routeId: string;
-  vehicleId: string;
-  driverName: string;
-  stops: number;
-  distance: number;
-  cost: number;
-  co2: number;
-}
 
 export const mockOptimizationResults: OptimizationResult[] = [
   {
@@ -232,7 +173,6 @@ export const mockOptimizationResults: OptimizationResult[] = [
   },
 ];
 
-// Mock Analytics Data - Cost vs CO2 over time
 export const mockCostCO2Data = [
   { date: 'Jan', cost: 42000, co2: 2950 },
   { date: 'Feb', cost: 41500, co2: 2820 },
@@ -241,7 +181,6 @@ export const mockCostCO2Data = [
   { date: 'May', cost: 45280, co2: 2847 },
 ];
 
-// Mock Fleet Utilization Over Time
 export const mockUtilizationData = [
   { time: '00:00', utilization: 45 },
   { time: '04:00', utilization: 38 },
@@ -251,7 +190,6 @@ export const mockUtilizationData = [
   { time: '20:00', utilization: 58 },
 ];
 
-// Mock Driver Workload Distribution
 export const mockWorkloadData = [
   { driver: 'Ahmed', deliveries: 42, hours: 38 },
   { driver: 'Mohammed', deliveries: 38, hours: 36 },
@@ -260,16 +198,6 @@ export const mockWorkloadData = [
   { driver: 'Omar', deliveries: 43, hours: 39 },
   { driver: 'Abdullah', deliveries: 39, hours: 35 },
 ];
-
-// Mock Notifications
-export interface Notification {
-  id: string;
-  type: 'route-update' | 'delay' | 'message';
-  title: string;
-  message: string;
-  time: string;
-  read: boolean;
-}
 
 export const mockNotifications: Notification[] = [
   {
@@ -297,14 +225,6 @@ export const mockNotifications: Notification[] = [
     read: true,
   },
 ];
-
-// Mock Driver Performance
-export interface DriverPerformance {
-  totalDeliveries: number;
-  onTimeRate: number;
-  efficiency: number;
-  workloadBalance: number;
-}
 
 export const mockDriverPerformance: DriverPerformance = {
   totalDeliveries: 156,

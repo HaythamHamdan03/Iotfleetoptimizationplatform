@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { DollarSign, Leaf, Gauge, Scale, Activity, Truck, Battery } from 'lucide-react';
-import { mockKPIData, mockVehicles } from '@/app/data/mockData';
+import { mockKPIData, mockVehicles } from '@/app/fixtures/mockData';
 import { useLanguage } from '@/app/i18n/LanguageContext';
 import { Button } from '@/app/components/ui/button';
 import { EmptyState } from '@/app/components/ui/EmptyState';

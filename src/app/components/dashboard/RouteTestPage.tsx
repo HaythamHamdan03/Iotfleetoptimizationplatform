@@ -10,6 +10,7 @@ import {
   type LatLng,
 } from '@/app/utils/streetRouting';
 import { buildPendingStopIcon, buildFinalStopIcon } from '@/app/utils/stopMarkers';
+import { geocodeAddress } from '@/app/services/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -84,12 +85,7 @@ function depotIcon(): L.DivIcon {
 }
 
 async function geocodeQuery(query: string): Promise<GeocodeResult> {
-  const res = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`);
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const err = (data && (data.error as string)) || 'address_not_found';
-    throw new Error(err);
-  }
+  const data = await geocodeAddress(query);
   if (typeof data.latitude !== 'number' || typeof data.longitude !== 'number') {
     throw new Error('address_not_found');
   }

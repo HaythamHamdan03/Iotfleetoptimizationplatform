@@ -8,45 +8,17 @@ import { Button } from '@/app/components/ui/button';
 import { Skeleton } from '@/app/components/ui/skeleton';
 import { useLanguage } from '@/app/i18n/LanguageContext';
 import { useIoT } from '@/app/context/IoTContext';
-import type { Disruption } from '@/app/hooks/useDisruptionDetector';
+import type { Disruption } from '@/app/types/iot';
+import type { FleetRouteResponse, StopStatus } from '@/app/types/api';
 import { IOT_CONFIG } from '@/app/config/iotConfig';
 import { fetchStreetRoute, fetchAlternateStreetRoute, type LatLng } from '@/app/utils/streetRouting';
+import { fetchFleetRoutes } from '@/app/services/api';
 
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).href,
   shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).href,
 });
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-type StopStatus = 'completed' | 'current' | 'upcoming' | 'final';
-
-interface FleetStop {
-  id: number;
-  name: string;
-  lat: number;
-  lon: number;
-  status: StopStatus;
-}
-
-interface FleetVehicle {
-  id: string;
-  name: string;
-  vehicle_type: 'ICE' | 'EV' | 'Hybrid';
-  stops: FleetStop[];
-  distance_km: number;
-  cost_sar: number;
-  co2_kg: number;
-  load_kg: number;
-  idle: boolean;
-}
-
-interface FleetRouteResponse {
-  depot: { name: string; lat: number; lon: number };
-  vehicles: FleetVehicle[];
-  source: 'optimized' | 'baseline';
-}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -165,9 +137,8 @@ export function LiveFleetMapPage() {
 
   // Fetch all vehicle routes from MongoDB via Flask
   useEffect(() => {
-    fetch('/optimizer/fleet-routes')
-      .then(r => r.json())
-      .then((d: FleetRouteResponse) => setFleetRoutes(d))
+    fetchFleetRoutes()
+      .then((d) => setFleetRoutes(d))
       .catch(() => setFleetRoutes(null))
       .finally(() => setRoutesLoading(false));
   }, []);

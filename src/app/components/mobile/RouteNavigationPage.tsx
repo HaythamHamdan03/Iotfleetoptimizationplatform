@@ -10,6 +10,8 @@ import {
 import { Button } from '@/app/components/ui/button';
 import { EmptyState } from '@/app/components/ui/EmptyState';
 import { fetchStreetRoute, fetchAlternateStreetRoute, type LatLng } from '@/app/utils/streetRouting';
+import { fetchFleetRoutes } from '@/app/services/api';
+import type { StopStatus } from '@/app/types/api';
 
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -19,26 +21,12 @@ L.Icon.Default.mergeOptions({
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type StopStatus = 'completed' | 'current' | 'upcoming' | 'final';
-
 interface RouteStop {
   id: number;
   name: string;
   lat: number;
   lon: number;
   status: StopStatus;
-}
-
-interface FleetRouteResponse {
-  depot: { name: string; lat: number; lon: number };
-  vehicles: Array<{
-    id: string;
-    name: string;
-    vehicle_type: string;
-    stops: RouteStop[];
-    distance_km: number;
-    idle: boolean;
-  }>;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -114,9 +102,8 @@ export function RouteNavigationPage() {
 
   // Fetch EV-02's route from MongoDB via Flask
   useEffect(() => {
-    fetch('/optimizer/fleet-routes')
-      .then(r => r.json())
-      .then((d: FleetRouteResponse) => {
+    fetchFleetRoutes()
+      .then((d) => {
         const activeVehicle = d.vehicles.find(v => !v.idle);
         if (activeVehicle) {
           setStops(activeVehicle.stops);

@@ -1,18 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { IOT_CONFIG } from '@/app/config/iotConfig';
-import { generateMockIoTPayload, IoTPayload } from '@/app/simulation/mockIoTDevice';
-
-// Raw JSON shape the ESP32 firmware sends
-interface ESP32Response {
-  temp_ok: boolean;
-  motion_ok: boolean;
-  sim_ok: boolean;
-  temp_c: number;
-  humidity: number;
-  temp_status: string;
-  motion: string;
-  sim_status: string;
-}
+import { generateMockIoTPayload } from '@/app/simulation/mockIoTDevice';
+import type { IoTPayload, ESP32Response, IoTDeviceState } from '@/app/types/iot';
+import { fetchIoTDeviceData } from '@/app/services/api';
 
 const BASE_LAT = 24.774265;
 const BASE_LON = 46.738586;
@@ -51,14 +41,6 @@ function mapESP32(raw: ESP32Response, tick: number): IoTPayload {
   };
 }
 
-interface IoTDeviceState {
-  data: IoTPayload | null;
-  isConnected: boolean;
-  lastUpdated: Date | null;
-  error: string | null;
-  consecutiveFailures: number;
-}
-
 export function useIoTDevice(): IoTDeviceState {
   const [state, setState] = useState<IoTDeviceState>({
     data: null,
@@ -93,9 +75,7 @@ export function useIoTDevice(): IoTDeviceState {
     // Real device — fetch through Vite proxy (/iot-device) to avoid mixed-content blocks
     const interval = setInterval(async () => {
       try {
-        const res = await fetch('/iot-device/data');
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const raw: ESP32Response = await res.json();
+        const raw: ESP32Response = await fetchIoTDeviceData();
         tickRef.current += 1;
         const data = mapESP32(raw, tickRef.current);
         lastDataRef.current = data;

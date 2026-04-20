@@ -1,5 +1,5 @@
 import L from 'leaflet';
-import type { DeliveryStop } from '@/app/data/mockData';
+import type { DeliveryStop } from '@/app/types/fleet';
 
 export function buildCompletedStopIcon(): L.DivIcon {
   return L.divIcon({

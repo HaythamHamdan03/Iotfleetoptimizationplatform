@@ -3,7 +3,7 @@ import {
   LineChart, Line, BarChart, Bar, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
-import { mockCostCO2Data, mockUtilizationData, mockWorkloadData } from '@/app/data/mockData';
+import { mockCostCO2Data, mockUtilizationData, mockWorkloadData } from '@/app/fixtures/mockData';
 import { TrendingUp, Download, BarChart3 } from 'lucide-react';
 import { useLanguage } from '@/app/i18n/LanguageContext';
 import { Button } from '@/app/components/ui/button';

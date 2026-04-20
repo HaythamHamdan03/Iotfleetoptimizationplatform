@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { useIoTDevice } from '@/app/hooks/useIoTDevice';
-import { useDisruptionDetector, Disruption } from '@/app/hooks/useDisruptionDetector';
-import { IoTPayload } from '@/app/simulation/mockIoTDevice';
-import { mockDeliveryStops } from '@/app/data/mockData';
+import { useDisruptionDetector } from '@/app/hooks/useDisruptionDetector';
+import type { IoTPayload, Disruption } from '@/app/types/iot';
+import { mockDeliveryStops } from '@/app/fixtures/mockData';
 
 interface IoTContextType {
   iotData: IoTPayload | null;

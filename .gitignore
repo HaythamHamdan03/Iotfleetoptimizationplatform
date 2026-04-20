@@ -12,11 +12,17 @@ dist/
 .env.*.local
 
 # TLS certificates and private keys - generated locally via mkcert
+cert.pem
+key.pem
 *.pem
 *.key
 *.crt
 *.p12
 *.pfx
+
+# Python
+__pycache__/
+*.pyc
 
 # OS files
 .DS_Store

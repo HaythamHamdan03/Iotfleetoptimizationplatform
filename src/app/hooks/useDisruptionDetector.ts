@@ -1,15 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { IoTPayload } from '@/app/simulation/mockIoTDevice';
-
-export interface Disruption {
-  id: string;
-  type: 'unexpected_stop' | 'gps_signal_lost' | 'temperature_alert' | 'traffic_slowdown';
-  detectedAt: Date;
-  resolvedAt: Date | null;
-  severity: 'low' | 'medium' | 'high';
-  vehicleId: string;
-  description: string;
-}
+import type { IoTPayload, Disruption } from '@/app/types/iot';
 
 interface DisruptionDetectorResult {
   disruptions: Disruption[];
